@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { Alert, Label, LoadingBlock, PageHeader, Panel } from "../components/ui";
+import { IconFuel } from "../components/Icons";
 
 type Vehicle = { id: string; registrationNo: string };
 type Fuel = { id: string; liters: number; cost: number; date: string; vehicle?: Vehicle };
@@ -22,21 +24,28 @@ export function ExpensesPage() {
   const [expType, setExpType] = useState("Toll");
   const [amount, setAmount] = useState("15");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const [f, e, v] = await Promise.all([
-      api<Fuel[]>("/api/fuel"),
-      api<Expense[]>("/api/expenses"),
-      api<Vehicle[]>("/api/vehicles"),
-    ]);
-    setFuel(f);
-    setExpenses(e);
-    setVehicles(v);
-    if (!vehicleId && v[0]) setVehicleId(v[0].id);
+    try {
+      const [f, e, v] = await Promise.all([
+        api<Fuel[]>("/api/fuel"),
+        api<Expense[]>("/api/expenses"),
+        api<Vehicle[]>("/api/vehicles"),
+      ]);
+      setFuel(f);
+      setExpenses(e);
+      setVehicles(v);
+      if (!vehicleId && v[0]) setVehicleId(v[0].id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    load().catch((e) => setError(e.message));
+    load();
   }, []);
 
   async function addFuel(e: FormEvent) {
@@ -69,95 +78,131 @@ export function ExpensesPage() {
     }
   }
 
+  const fuelTotal = fuel.reduce((s, f) => s + Number(f.cost), 0);
+  const expTotal = expenses.reduce((s, x) => s + Number(x.amount), 0);
+
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">Fuel & Expenses</h1>
-      <p className="text-slate-500 text-sm mb-6">Operational costs</p>
-      {error && <p className="text-rose-600 text-sm mb-3">{error}</p>}
+      <PageHeader
+        title="Fuel & expenses"
+        subtitle="Track operational spend in ₹ — fuel logs and miscellaneous costs."
+      />
+      {error && <Alert type="error">{error}</Alert>}
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          <h2 className="font-semibold mb-3">Add fuel log</h2>
-          <form onSubmit={addFuel} className="bg-white border rounded-xl p-4 space-y-3 shadow-sm">
-            <select
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-            >
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.registrationNo}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={liters}
-              onChange={(e) => setLiters(e.target.value)}
-              placeholder="Liters"
-            />
-            <input
-              type="number"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              placeholder="Cost"
-            />
-            <button type="submit" className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg">
-              Save fuel
-            </button>
-          </form>
-          <ul className="mt-4 space-y-2 text-sm">
-            {fuel.slice(0, 8).map((f) => (
-              <li key={f.id} className="bg-white border rounded-lg px-3 py-2">
-                {f.vehicle?.registrationNo}: {f.liters}L · ₹{f.cost}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {loading ? (
+        <LoadingBlock />
+      ) : (
+        <>
+          <div className="mb-6 grid sm:grid-cols-2 gap-4 animate-fade-up">
+            <div className="card-elevated rounded-2xl p-5 flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/25">
+                <IconFuel className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fuel total</div>
+                <div className="text-2xl font-bold text-slate-900">₹{fuelTotal.toFixed(0)}</div>
+              </div>
+            </div>
+            <div className="card-elevated rounded-2xl p-5 flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/25">
+                <span className="text-lg font-bold">₹</span>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Other expenses</div>
+                <div className="text-2xl font-bold text-slate-900">₹{expTotal.toFixed(0)}</div>
+              </div>
+            </div>
+          </div>
 
-        <div>
-          <h2 className="font-semibold mb-3">Add expense</h2>
-          <form
-            onSubmit={addExpense}
-            className="bg-white border rounded-xl p-4 space-y-3 shadow-sm"
-          >
-            <select
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-            >
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.registrationNo}
-                </option>
-              ))}
-            </select>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={expType}
-              onChange={(e) => setExpType(e.target.value)}
-            />
-            <input
-              type="number"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <button type="submit" className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg">
-              Save expense
-            </button>
-          </form>
-          <ul className="mt-4 space-y-2 text-sm">
-            {expenses.slice(0, 8).map((x) => (
-              <li key={x.id} className="bg-white border rounded-lg px-3 py-2">
-                {x.type}: ₹{x.amount} {x.vehicle ? `(${x.vehicle.registrationNo})` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Panel className="animate-fade-up" title="Log fuel" description="Liters & cost per vehicle">
+              <form onSubmit={addFuel} className="p-5 space-y-3">
+                <div>
+                  <Label>Vehicle</Label>
+                  <select className="input-field" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.registrationNo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Liters</Label>
+                    <input type="number" className="input-field" value={liters} onChange={(e) => setLiters(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Cost (₹)</Label>
+                    <input type="number" className="input-field" value={cost} onChange={(e) => setCost(e.target.value)} />
+                  </div>
+                </div>
+                <button type="submit" className="btn-primary w-full">
+                  Save fuel log
+                </button>
+              </form>
+              <ul className="border-t border-slate-100 divide-y divide-slate-50 max-h-64 overflow-auto">
+                {fuel.slice(0, 10).map((f) => (
+                  <li key={f.id} className="px-5 py-3 flex justify-between text-sm">
+                    <span className="font-medium text-slate-700">
+                      {f.vehicle?.registrationNo}
+                      <span className="text-slate-400 font-normal"> · {f.liters}L</span>
+                    </span>
+                    <span className="font-semibold text-slate-900">₹{f.cost}</span>
+                  </li>
+                ))}
+                {fuel.length === 0 && (
+                  <li className="px-5 py-8 text-center text-sm text-slate-400">No fuel logs yet</li>
+                )}
+              </ul>
+            </Panel>
+
+            <Panel className="animate-fade-up stagger-2" title="Log expense" description="Tolls, fees, misc">
+              <form onSubmit={addExpense} className="p-5 space-y-3">
+                <div>
+                  <Label>Vehicle</Label>
+                  <select className="input-field" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.registrationNo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Type</Label>
+                    <input className="input-field" value={expType} onChange={(e) => setExpType(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Amount (₹)</Label>
+                    <input type="number" className="input-field" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  </div>
+                </div>
+                <button type="submit" className="btn-primary w-full">
+                  Save expense
+                </button>
+              </form>
+              <ul className="border-t border-slate-100 divide-y divide-slate-50 max-h-64 overflow-auto">
+                {expenses.slice(0, 10).map((x) => (
+                  <li key={x.id} className="px-5 py-3 flex justify-between text-sm">
+                    <span className="font-medium text-slate-700">
+                      {x.type}
+                      {x.vehicle && (
+                        <span className="text-slate-400 font-normal"> · {x.vehicle.registrationNo}</span>
+                      )}
+                    </span>
+                    <span className="font-semibold text-slate-900">₹{x.amount}</span>
+                  </li>
+                ))}
+                {expenses.length === 0 && (
+                  <li className="px-5 py-8 text-center text-sm text-slate-400">No expenses yet</li>
+                )}
+              </ul>
+            </Panel>
+          </div>
+        </>
+      )}
     </div>
   );
 }

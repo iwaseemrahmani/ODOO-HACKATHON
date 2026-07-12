@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
+import { Alert, EmptyState, Label, LoadingBlock, PageHeader, Panel } from "../components/ui";
 
 type Vehicle = { id: string; registrationNo: string; status: string };
 type Record = {
@@ -18,19 +19,26 @@ export function MaintenancePage() {
   const [description, setDescription] = useState("Oil change");
   const [cost, setCost] = useState("120");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const [m, v] = await Promise.all([
-      api<Record[]>("/api/maintenance"),
-      api<Vehicle[]>("/api/vehicles"),
-    ]);
-    setItems(m);
-    setVehicles(v);
-    if (!vehicleId && v[0]) setVehicleId(v[0].id);
+    try {
+      const [m, v] = await Promise.all([
+        api<Record[]>("/api/maintenance"),
+        api<Vehicle[]>("/api/vehicles"),
+      ]);
+      setItems(m);
+      setVehicles(v);
+      if (!vehicleId && v[0]) setVehicleId(v[0].id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    load().catch((e) => setError(e.message));
+    load();
   }, []);
 
   async function onOpen(e: FormEvent) {
@@ -63,78 +71,78 @@ export function MaintenancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">Maintenance</h1>
-      <p className="text-slate-500 text-sm mb-6">Open → vehicle InShop · Close → Available</p>
-      {error && <p className="text-rose-600 mb-3 text-sm">{error}</p>}
+      <PageHeader
+        title="Maintenance bay"
+        subtitle="Opening a job sets the vehicle In Shop. Closing restores Available."
+      />
+      {error && <Alert type="error">{error}</Alert>}
 
-      <form
-        onSubmit={onOpen}
-        className="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end shadow-sm"
-      >
-        <select
-          className="border rounded-lg px-3 py-2 text-sm"
-          value={vehicleId}
-          onChange={(e) => setVehicleId(e.target.value)}
-        >
-          {vehicles.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.registrationNo} ({v.status})
-            </option>
-          ))}
-        </select>
-        <input
-          className="border rounded-lg px-3 py-2 text-sm"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-        />
-        <input
-          type="number"
-          className="border rounded-lg px-3 py-2 text-sm w-28"
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-        />
-        <button type="submit" className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg">
-          Open maintenance
-        </button>
-      </form>
+      <Panel className="mb-6 animate-fade-up" title="Open maintenance" description="Vehicle leaves the dispatch pool">
+        <form onSubmit={onOpen} className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div>
+            <Label>Vehicle</Label>
+            <select className="input-field" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+              {vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.registrationNo} ({v.status})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Work description</Label>
+            <input className="input-field" value={description} onChange={(e) => setDescription(e.target.value)} required />
+          </div>
+          <div>
+            <Label>Cost (₹)</Label>
+            <input type="number" className="input-field" value={cost} onChange={(e) => setCost(e.target.value)} />
+          </div>
+          <button type="submit" className="btn-primary h-[42px]">
+            Open job
+          </button>
+        </form>
+      </Panel>
 
-      <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left">
-            <tr>
-              <th className="p-3">Vehicle</th>
-              <th className="p-3">Description</th>
-              <th className="p-3">Cost</th>
-              <th className="p-3">Status</th>
-              <th className="p-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((r) => (
-              <tr key={r.id} className="border-t">
-                <td className="p-3">{r.vehicle?.registrationNo}</td>
-                <td className="p-3">{r.description}</td>
-                <td className="p-3">₹{r.cost}</td>
-                <td className="p-3">
-                  <StatusBadge status={r.status} />
-                </td>
-                <td className="p-3">
-                  {r.status === "Open" && (
-                    <button
-                      type="button"
-                      className="text-indigo-600 font-medium"
-                      onClick={() => onClose(r.id)}
-                    >
-                      Close
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Panel className="animate-fade-up stagger-2">
+        {loading ? (
+          <LoadingBlock />
+        ) : items.length === 0 ? (
+          <EmptyState title="No maintenance records" hint="Open a job when a unit needs service." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table-shell">
+              <thead>
+                <tr>
+                  <th>Vehicle</th>
+                  <th>Description</th>
+                  <th>Cost</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((r) => (
+                  <tr key={r.id}>
+                    <td className="font-mono text-xs font-semibold">{r.vehicle?.registrationNo}</td>
+                    <td>{r.description}</td>
+                    <td className="font-semibold text-slate-800">₹{r.cost}</td>
+                    <td>
+                      <StatusBadge status={r.status} />
+                    </td>
+                    <td>
+                      {r.status === "Open" && (
+                        <button type="button" className="btn-ghost btn-success" onClick={() => onClose(r.id)}>
+                          Close job
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }
