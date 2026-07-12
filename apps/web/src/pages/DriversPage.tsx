@@ -8,8 +8,10 @@ type Driver = {
   id: string;
   name: string;
   licenseNo: string;
+  licenseCategory: string;
   licenseExpiry: string;
   phone: string | null;
+  safetyScore: number;
   status: string;
 };
 
@@ -19,7 +21,10 @@ export function DriversPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [licenseNo, setLicenseNo] = useState("");
+  const [licenseCategory, setLicenseCategory] = useState("C");
   const [licenseExpiry, setLicenseExpiry] = useState("2028-12-31");
+  const [phone, setPhone] = useState("");
+  const [safetyScore, setSafetyScore] = useState("100");
   const canCreate = hasRole("FLEET_MANAGER", "SAFETY_OFFICER", "DISPATCHER");
 
   async function load() {
@@ -42,36 +47,40 @@ export function DriversPage() {
     try {
       await api("/api/drivers", {
         method: "POST",
-        body: JSON.stringify({ name, licenseNo, licenseExpiry }),
+        body: JSON.stringify({
+          name,
+          licenseNo,
+          licenseCategory,
+          licenseExpiry,
+          phone: phone || null,
+          safetyScore: Number(safetyScore),
+        }),
       });
       setName("");
       setLicenseNo("");
+      setPhone("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     }
   }
 
-  function expiryTone(date: string) {
-    const days = (new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-    if (days < 0) return "text-rose-600 font-semibold";
-    if (days < 60) return "text-amber-600 font-medium";
-    return "text-slate-600";
-  }
-
   return (
     <div>
       <PageHeader
         title="Drivers"
-        subtitle="Licenses, expiry risk, and assignment readiness for dispatch."
+        subtitle="License category, expiry, contact, safety score, and status (incl. Off Duty)."
       />
       {error && <Alert type="error">{error}</Alert>}
 
       {canCreate && (
-        <Panel className="mb-6 animate-fade-up" title="Add driver" description="Safety & fleet roles">
-          <form onSubmit={onCreate} className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <Panel className="mb-6 animate-fade-up" title="Add driver">
+          <form
+            onSubmit={onCreate}
+            className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end"
+          >
             <div>
-              <Label>Full name</Label>
+              <Label>Name</Label>
               <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div>
@@ -79,8 +88,20 @@ export function DriversPage() {
               <input className="input-field font-mono" value={licenseNo} onChange={(e) => setLicenseNo(e.target.value)} required />
             </div>
             <div>
+              <Label>License category</Label>
+              <input className="input-field" value={licenseCategory} onChange={(e) => setLicenseCategory(e.target.value)} required />
+            </div>
+            <div>
               <Label>License expiry</Label>
               <input type="date" className="input-field" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Contact number</Label>
+              <input className="input-field" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div>
+              <Label>Safety score</Label>
+              <input type="number" min={0} max={100} className="input-field" value={safetyScore} onChange={(e) => setSafetyScore(e.target.value)} />
             </div>
             <button type="submit" className="btn-primary h-[42px]">
               Add driver
@@ -89,39 +110,38 @@ export function DriversPage() {
         </Panel>
       )}
 
-      <Panel className="animate-fade-up stagger-2">
+      <Panel>
         {loading ? (
           <LoadingBlock />
         ) : items.length === 0 ? (
-          <EmptyState title="No drivers" hint="Add drivers with valid licenses." />
+          <EmptyState title="No drivers" />
         ) : (
           <div className="overflow-x-auto">
             <table className="table-shell">
               <thead>
                 <tr>
-                  <th>Driver</th>
+                  <th>Name</th>
                   <th>License</th>
+                  <th>Category</th>
                   <th>Expiry</th>
                   <th>Phone</th>
+                  <th>Safety</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((d) => (
                   <tr key={d.id}>
+                    <td className="font-semibold">{d.name}</td>
+                    <td className="font-mono text-xs">{d.licenseNo}</td>
+                    <td>{d.licenseCategory}</td>
+                    <td>{new Date(d.licenseExpiry).toLocaleDateString()}</td>
+                    <td>{d.phone || "—"}</td>
                     <td>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-sky-100 text-xs font-bold text-indigo-700">
-                          {d.name.charAt(0)}
-                        </div>
-                        <span className="font-semibold text-slate-900">{d.name}</span>
-                      </div>
+                      <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold">
+                        {d.safetyScore}
+                      </span>
                     </td>
-                    <td className="font-mono text-xs text-slate-600">{d.licenseNo}</td>
-                    <td className={expiryTone(d.licenseExpiry)}>
-                      {new Date(d.licenseExpiry).toLocaleDateString()}
-                    </td>
-                    <td className="text-slate-500">{d.phone || "—"}</td>
                     <td>
                       <StatusBadge status={d.status} />
                     </td>

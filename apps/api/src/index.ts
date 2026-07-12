@@ -13,6 +13,7 @@ import {
   expensesRouter,
 } from "./routes/trips.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
+import { reportsRouter } from "./routes/reports.routes";
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use("/api/maintenance", maintenanceRouter);
 app.use("/api/fuel", fuelRouter);
 app.use("/api/expenses", expensesRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/reports", reportsRouter);
 
 app.use(
   (

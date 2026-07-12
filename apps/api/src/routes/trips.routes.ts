@@ -48,8 +48,8 @@ tripsRouter.post("/", requireRole("DISPATCHER", "FLEET_MANAGER"), async (req, re
       origin: req.body.origin,
       destination: req.body.destination,
       cargoWeight: Number(req.body.cargoWeight),
+      plannedDistance: Number(req.body.plannedDistance),
       scheduledAt: req.body.scheduledAt,
-      distanceKm: req.body.distanceKm != null ? Number(req.body.distanceKm) : undefined,
       notes: req.body.notes,
     });
     res.status(201).json(trip);
@@ -78,6 +78,7 @@ tripsRouter.post(
     try {
       const trip = await completeTrip(req.params.id, {
         distanceKm: req.body.distanceKm != null ? Number(req.body.distanceKm) : undefined,
+        revenue: req.body.revenue != null ? Number(req.body.revenue) : undefined,
         notes: req.body.notes,
       });
       res.json(trip);

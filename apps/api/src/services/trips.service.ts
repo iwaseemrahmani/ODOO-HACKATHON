@@ -30,8 +30,8 @@ export async function createTrip(input: {
   origin: string;
   destination: string;
   cargoWeight: number;
+  plannedDistance: number;
   scheduledAt?: string;
-  distanceKm?: number;
   notes?: string;
 }) {
   const vehicle = await prisma.vehicle.findUnique({ where: { id: input.vehicleId } });
@@ -41,6 +41,10 @@ export async function createTrip(input: {
     throw new BusinessRuleError(
       `Cargo weight ${input.cargoWeight} kg exceeds vehicle max load ${vehicle.maxLoad} kg`
     );
+  }
+
+  if (input.plannedDistance == null || Number.isNaN(input.plannedDistance) || input.plannedDistance < 0) {
+    throw new BusinessRuleError("plannedDistance is required and must be >= 0");
   }
 
   const driver = await prisma.driver.findUnique({ where: { id: input.driverId } });
@@ -53,8 +57,8 @@ export async function createTrip(input: {
       origin: input.origin,
       destination: input.destination,
       cargoWeight: input.cargoWeight,
+      plannedDistance: input.plannedDistance,
       scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : new Date(),
-      distanceKm: input.distanceKm,
       notes: input.notes,
       status: TripStatus.Draft,
     },
@@ -132,7 +136,7 @@ export async function dispatchTrip(tripId: string) {
 
 export async function completeTrip(
   tripId: string,
-  opts?: { distanceKm?: number; notes?: string }
+  opts?: { distanceKm?: number; revenue?: number; notes?: string }
 ) {
   return prisma.$transaction(async (tx) => {
     const trip = await tx.trip.findUnique({ where: { id: tripId } });
@@ -155,7 +159,9 @@ export async function completeTrip(
       data: {
         status: TripStatus.Completed,
         completedAt: new Date(),
-        distanceKm: opts?.distanceKm ?? undefined,
+        distanceKm:
+          opts?.distanceKm != null ? opts.distanceKm : trip.plannedDistance || undefined,
+        revenue: opts?.revenue != null ? opts.revenue : undefined,
         notes: opts?.notes ?? undefined,
       },
       include: { vehicle: true, driver: true },

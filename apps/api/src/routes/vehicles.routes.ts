@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
@@ -7,8 +8,21 @@ import { isPrismaUniqueError } from "../services/trips.service";
 export const vehiclesRouter = Router();
 vehiclesRouter.use(requireAuth);
 
-vehiclesRouter.get("/", async (_req, res) => {
-  const items = await prisma.vehicle.findMany({ orderBy: { createdAt: "desc" } });
+vehiclesRouter.get("/", async (req, res) => {
+  const where: Prisma.VehicleWhereInput = {};
+  if (typeof req.query.type === "string" && req.query.type.trim()) {
+    where.type = req.query.type.trim();
+  }
+  if (typeof req.query.status === "string" && req.query.status.trim()) {
+    where.status = req.query.status.trim() as Prisma.EnumVehicleStatusFilter["equals"];
+  }
+  if (typeof req.query.region === "string" && req.query.region.trim()) {
+    where.region = req.query.region.trim();
+  }
+  const items = await prisma.vehicle.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+  });
   res.json(items);
 });
 
@@ -23,7 +37,17 @@ vehiclesRouter.post(
   requireRole("FLEET_MANAGER", "DISPATCHER"),
   async (req, res) => {
     try {
-      const { registrationNo, model, capacity, maxLoad, odometer, status } = req.body;
+      const {
+        registrationNo,
+        model,
+        type,
+        region,
+        capacity,
+        maxLoad,
+        odometer,
+        acquisitionCost,
+        status,
+      } = req.body;
       if (!registrationNo || !model || maxLoad == null) {
         return res.status(400).json({ error: "registrationNo, model, maxLoad required" });
       }
@@ -31,9 +55,12 @@ vehiclesRouter.post(
         data: {
           registrationNo: String(registrationNo).trim(),
           model: String(model).trim(),
+          type: type ? String(type).trim() : "Van",
+          region: region ? String(region).trim() : "North",
           capacity: capacity ?? null,
           maxLoad: Number(maxLoad),
           odometer: odometer != null ? Number(odometer) : 0,
+          acquisitionCost: acquisitionCost != null ? Number(acquisitionCost) : 0,
           status,
         },
       });
@@ -48,27 +75,24 @@ vehiclesRouter.post(
   }
 );
 
-vehiclesRouter.put(
-  "/:id",
-  requireRole("FLEET_MANAGER"),
-  async (req, res) => {
-    try {
-      const data = { ...req.body };
-      if (data.maxLoad != null) data.maxLoad = Number(data.maxLoad);
-      if (data.odometer != null) data.odometer = Number(data.odometer);
-      const item = await prisma.vehicle.update({
-        where: { id: req.params.id },
-        data,
-      });
-      res.json(item);
-    } catch (err) {
-      if (isPrismaUniqueError(err)) {
-        return res.status(409).json({ error: "Vehicle registration number must be unique" });
-      }
-      res.status(400).json({ error: "Update vehicle failed" });
+vehiclesRouter.put("/:id", requireRole("FLEET_MANAGER"), async (req, res) => {
+  try {
+    const data = { ...req.body };
+    if (data.maxLoad != null) data.maxLoad = Number(data.maxLoad);
+    if (data.odometer != null) data.odometer = Number(data.odometer);
+    if (data.acquisitionCost != null) data.acquisitionCost = Number(data.acquisitionCost);
+    const item = await prisma.vehicle.update({
+      where: { id: req.params.id },
+      data,
+    });
+    res.json(item);
+  } catch (err) {
+    if (isPrismaUniqueError(err)) {
+      return res.status(409).json({ error: "Vehicle registration number must be unique" });
     }
+    res.status(400).json({ error: "Update vehicle failed" });
   }
-);
+});
 
 vehiclesRouter.delete("/:id", requireRole("FLEET_MANAGER"), async (req, res) => {
   try {

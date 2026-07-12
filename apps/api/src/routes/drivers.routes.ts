@@ -23,7 +23,15 @@ driversRouter.post(
   requireRole("FLEET_MANAGER", "SAFETY_OFFICER", "DISPATCHER"),
   async (req, res) => {
     try {
-      const { name, licenseNo, licenseExpiry, phone, status } = req.body;
+      const {
+        name,
+        licenseNo,
+        licenseCategory,
+        licenseExpiry,
+        phone,
+        safetyScore,
+        status,
+      } = req.body;
       if (!name || !licenseNo || !licenseExpiry) {
         return res.status(400).json({ error: "name, licenseNo, licenseExpiry required" });
       }
@@ -31,8 +39,10 @@ driversRouter.post(
         data: {
           name: String(name).trim(),
           licenseNo: String(licenseNo).trim(),
+          licenseCategory: licenseCategory ? String(licenseCategory).trim() : "C",
           licenseExpiry: new Date(licenseExpiry),
           phone: phone ?? null,
+          safetyScore: safetyScore != null ? Number(safetyScore) : 100,
           status,
         },
       });
@@ -54,6 +64,7 @@ driversRouter.put(
     try {
       const data = { ...req.body };
       if (data.licenseExpiry) data.licenseExpiry = new Date(data.licenseExpiry);
+      if (data.safetyScore != null) data.safetyScore = Number(data.safetyScore);
       const item = await prisma.driver.update({
         where: { id: req.params.id },
         data,

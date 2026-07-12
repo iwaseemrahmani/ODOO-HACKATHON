@@ -8,8 +8,12 @@ type Vehicle = {
   id: string;
   registrationNo: string;
   model: string;
+  type: string;
+  region: string;
   capacity: string | null;
   maxLoad: number;
+  odometer: number;
+  acquisitionCost: number;
   status: string;
 };
 
@@ -19,7 +23,11 @@ export function VehiclesPage() {
   const [loading, setLoading] = useState(true);
   const [reg, setReg] = useState("");
   const [model, setModel] = useState("");
+  const [type, setType] = useState("Van");
+  const [region, setRegion] = useState("North");
   const [maxLoad, setMaxLoad] = useState("500");
+  const [odometer, setOdometer] = useState("0");
+  const [acquisitionCost, setAcquisitionCost] = useState("25000");
   const canCreate = hasRole("FLEET_MANAGER", "DISPATCHER");
 
   async function load() {
@@ -45,7 +53,11 @@ export function VehiclesPage() {
         body: JSON.stringify({
           registrationNo: reg,
           model,
+          type,
+          region,
           maxLoad: Number(maxLoad),
+          odometer: Number(odometer),
+          acquisitionCost: Number(acquisitionCost),
         }),
       });
       setReg("");
@@ -60,24 +72,53 @@ export function VehiclesPage() {
     <div>
       <PageHeader
         title="Vehicle registry"
-        subtitle="Unique registration, load capacity, and live operational status."
+        subtitle="Registration, type, region, load, odometer, acquisition cost, and status."
       />
       {error && <Alert type="error">{error}</Alert>}
 
       {canCreate && (
-        <Panel className="mb-6 animate-fade-up" title="Register vehicle" description="Fleet managers & dispatchers">
-          <form onSubmit={onCreate} className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <Panel className="mb-6 animate-fade-up" title="Register vehicle">
+          <form
+            onSubmit={onCreate}
+            className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end"
+          >
             <div>
               <Label>Registration No</Label>
-              <input className="input-field font-mono" value={reg} onChange={(e) => setReg(e.target.value)} placeholder="Van-05" required />
+              <input className="input-field font-mono" value={reg} onChange={(e) => setReg(e.target.value)} required />
             </div>
             <div>
-              <Label>Model</Label>
-              <input className="input-field" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Toyota HiAce" required />
+              <Label>Model / name</Label>
+              <input className="input-field" value={model} onChange={(e) => setModel(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <select className="input-field" value={type} onChange={(e) => setType(e.target.value)}>
+                <option>Van</option>
+                <option>Truck</option>
+                <option>Bus</option>
+                <option>Car</option>
+              </select>
+            </div>
+            <div>
+              <Label>Region</Label>
+              <select className="input-field" value={region} onChange={(e) => setRegion(e.target.value)}>
+                <option>North</option>
+                <option>South</option>
+                <option>East</option>
+                <option>West</option>
+              </select>
             </div>
             <div>
               <Label>Max load (kg)</Label>
               <input type="number" className="input-field" value={maxLoad} onChange={(e) => setMaxLoad(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Odometer (km)</Label>
+              <input type="number" className="input-field" value={odometer} onChange={(e) => setOdometer(e.target.value)} />
+            </div>
+            <div>
+              <Label>Acquisition cost (₹)</Label>
+              <input type="number" className="input-field" value={acquisitionCost} onChange={(e) => setAcquisitionCost(e.target.value)} />
             </div>
             <button type="submit" className="btn-primary h-[42px]">
               Add vehicle
@@ -90,30 +131,32 @@ export function VehiclesPage() {
         {loading ? (
           <LoadingBlock />
         ) : items.length === 0 ? (
-          <EmptyState title="No vehicles yet" hint="Register your first asset above." />
+          <EmptyState title="No vehicles yet" />
         ) : (
           <div className="overflow-x-auto">
             <table className="table-shell">
               <thead>
                 <tr>
-                  <th>Registration</th>
+                  <th>Reg. No</th>
                   <th>Model</th>
-                  <th>Capacity</th>
+                  <th>Type</th>
+                  <th>Region</th>
                   <th>Max load</th>
+                  <th>Odometer</th>
+                  <th>Acq. cost</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((v) => (
                   <tr key={v.id}>
-                    <td className="font-semibold font-mono text-slate-900">{v.registrationNo}</td>
-                    <td className="text-slate-700">{v.model}</td>
-                    <td className="text-slate-500">{v.capacity || "—"}</td>
-                    <td>
-                      <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                        {v.maxLoad} kg
-                      </span>
-                    </td>
+                    <td className="font-semibold font-mono">{v.registrationNo}</td>
+                    <td>{v.model}</td>
+                    <td>{v.type}</td>
+                    <td>{v.region}</td>
+                    <td>{v.maxLoad} kg</td>
+                    <td>{v.odometer} km</td>
+                    <td>₹{Number(v.acquisitionCost).toLocaleString()}</td>
                     <td>
                       <StatusBadge status={v.status} />
                     </td>

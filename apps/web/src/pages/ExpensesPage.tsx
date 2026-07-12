@@ -85,7 +85,7 @@ export function ExpensesPage() {
     <div>
       <PageHeader
         title="Fuel & expenses"
-        subtitle="Track operational spend in ₹ — fuel logs and miscellaneous costs."
+        subtitle="Track operational spend in ₹. Per-vehicle Fuel + Maintenance totals are on Reports."
       />
       {error && <Alert type="error">{error}</Alert>}
 

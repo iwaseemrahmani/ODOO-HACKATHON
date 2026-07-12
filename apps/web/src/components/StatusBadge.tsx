@@ -4,6 +4,7 @@ const styles: Record<string, string> = {
   InShop: "bg-amber-50 text-amber-800 ring-amber-600/15",
   Retired: "bg-slate-100 text-slate-600 ring-slate-500/10",
   Suspended: "bg-rose-50 text-rose-700 ring-rose-600/15",
+  OffDuty: "bg-orange-50 text-orange-800 ring-orange-600/15",
   Draft: "bg-slate-100 text-slate-600 ring-slate-500/10",
   Dispatched: "bg-indigo-50 text-indigo-700 ring-indigo-600/15",
   Completed: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
@@ -25,7 +26,7 @@ export function StatusBadge({ status }: { status: string }) {
             ? "bg-emerald-500"
             : status === "OnTrip" || status === "Dispatched"
               ? "bg-sky-500"
-              : status === "InShop" || status === "Open" || status === "Draft"
+              : status === "InShop" || status === "Open" || status === "Draft" || status === "OffDuty"
                 ? "bg-amber-500"
                 : status === "Suspended" || status === "Cancelled"
                   ? "bg-rose-500"

@@ -44,6 +44,12 @@ const allLinks = [
     icon: IconFuel,
     roles: ["FLEET_MANAGER", "FINANCIAL_ANALYST", "DISPATCHER"],
   },
+  {
+    to: "/reports",
+    label: "Reports",
+    icon: IconChart,
+    roles: ["FLEET_MANAGER", "FINANCIAL_ANALYST", "DISPATCHER"],
+  },
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
