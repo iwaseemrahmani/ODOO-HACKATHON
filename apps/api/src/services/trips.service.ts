@@ -21,8 +21,57 @@ function isLicenseExpired(expiry: Date) {
   return end < new Date();
 }
 
+function assertVehicleAssignable(
+  vehicle: { registrationNo: string; status: VehicleStatus; maxLoad: number },
+  cargoWeight: number
+) {
+  if (
+    vehicle.status === VehicleStatus.Retired ||
+    vehicle.status === VehicleStatus.InShop ||
+    vehicle.status === VehicleStatus.OnTrip
+  ) {
+    throw new BusinessRuleError(
+      `Vehicle ${vehicle.registrationNo} cannot be assigned (status: ${vehicle.status}). Retired/In Shop/On Trip are not allowed.`
+    );
+  }
+  if (vehicle.status !== VehicleStatus.Available) {
+    throw new BusinessRuleError(
+      `Vehicle ${vehicle.registrationNo} must be Available to assign (status: ${vehicle.status})`
+    );
+  }
+  if (cargoWeight > vehicle.maxLoad) {
+    throw new BusinessRuleError(
+      `Cargo weight ${cargoWeight} kg exceeds vehicle max load ${vehicle.maxLoad} kg`
+    );
+  }
+}
+
+function assertDriverAssignable(driver: {
+  name: string;
+  status: DriverStatus;
+  licenseExpiry: Date;
+}) {
+  if (driver.status === DriverStatus.Suspended) {
+    throw new BusinessRuleError(`Driver ${driver.name} is Suspended and cannot be assigned`);
+  }
+  if (driver.status === DriverStatus.OnTrip) {
+    throw new BusinessRuleError(`Driver ${driver.name} is already On Trip`);
+  }
+  if (driver.status === DriverStatus.OffDuty) {
+    throw new BusinessRuleError(`Driver ${driver.name} is Off Duty and cannot be assigned`);
+  }
+  if (driver.status !== DriverStatus.Available) {
+    throw new BusinessRuleError(
+      `Driver ${driver.name} must be Available (status: ${driver.status})`
+    );
+  }
+  if (isLicenseExpired(driver.licenseExpiry)) {
+    throw new BusinessRuleError(`Driver ${driver.name} has an expired license`);
+  }
+}
+
 /**
- * Mandatory business rules for trip lifecycle.
+ * Mandatory business rules for trip lifecycle (brief §4).
  */
 export async function createTrip(input: {
   vehicleId: string;
@@ -34,28 +83,36 @@ export async function createTrip(input: {
   scheduledAt?: string;
   notes?: string;
 }) {
-  const vehicle = await prisma.vehicle.findUnique({ where: { id: input.vehicleId } });
-  if (!vehicle) throw new BusinessRuleError("Vehicle not found", 404);
-
-  if (input.cargoWeight > vehicle.maxLoad) {
-    throw new BusinessRuleError(
-      `Cargo weight ${input.cargoWeight} kg exceeds vehicle max load ${vehicle.maxLoad} kg`
-    );
+  if (!input.origin?.trim() || !input.destination?.trim()) {
+    throw new BusinessRuleError("Source and destination are required");
   }
-
-  if (input.plannedDistance == null || Number.isNaN(input.plannedDistance) || input.plannedDistance < 0) {
+  if (!Number.isFinite(input.cargoWeight) || input.cargoWeight <= 0) {
+    throw new BusinessRuleError("Cargo weight must be greater than 0");
+  }
+  if (
+    input.plannedDistance == null ||
+    Number.isNaN(input.plannedDistance) ||
+    input.plannedDistance < 0
+  ) {
     throw new BusinessRuleError("plannedDistance is required and must be >= 0");
   }
 
+  const vehicle = await prisma.vehicle.findUnique({ where: { id: input.vehicleId } });
+  if (!vehicle) throw new BusinessRuleError("Vehicle not found", 404);
+
   const driver = await prisma.driver.findUnique({ where: { id: input.driverId } });
   if (!driver) throw new BusinessRuleError("Driver not found", 404);
+
+  // Same assignment rules as dispatch — draft cannot hold blocked assets
+  assertVehicleAssignable(vehicle, input.cargoWeight);
+  assertDriverAssignable(driver);
 
   return prisma.trip.create({
     data: {
       vehicleId: input.vehicleId,
       driverId: input.driverId,
-      origin: input.origin,
-      destination: input.destination,
+      origin: input.origin.trim(),
+      destination: input.destination.trim(),
       cargoWeight: input.cargoWeight,
       plannedDistance: input.plannedDistance,
       scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : new Date(),
@@ -77,38 +134,12 @@ export async function dispatchTrip(tripId: string) {
       throw new BusinessRuleError(`Cannot dispatch trip in status ${trip.status}`);
     }
 
-    const { vehicle, driver } = trip;
+    assertVehicleAssignable(trip.vehicle, trip.cargoWeight);
+    assertDriverAssignable(trip.driver);
 
-    if (
-      vehicle.status === VehicleStatus.Retired ||
-      vehicle.status === VehicleStatus.InShop ||
-      vehicle.status === VehicleStatus.OnTrip
-    ) {
-      throw new BusinessRuleError(
-        `Vehicle ${vehicle.registrationNo} cannot be dispatched (status: ${vehicle.status})`
-      );
-    }
-
-    if (driver.status === DriverStatus.Suspended || driver.status === DriverStatus.OnTrip) {
-      throw new BusinessRuleError(
-        `Driver ${driver.name} cannot be assigned (status: ${driver.status})`
-      );
-    }
-
-    if (isLicenseExpired(driver.licenseExpiry)) {
-      throw new BusinessRuleError(`Driver ${driver.name} has an expired license`);
-    }
-
-    if (trip.cargoWeight > vehicle.maxLoad) {
-      throw new BusinessRuleError(
-        `Cargo weight ${trip.cargoWeight} kg exceeds max load ${vehicle.maxLoad} kg`
-      );
-    }
-
-    // Re-check latest status (race safety)
     const [vNow, dNow] = await Promise.all([
-      tx.vehicle.findUniqueOrThrow({ where: { id: vehicle.id } }),
-      tx.driver.findUniqueOrThrow({ where: { id: driver.id } }),
+      tx.vehicle.findUniqueOrThrow({ where: { id: trip.vehicleId } }),
+      tx.driver.findUniqueOrThrow({ where: { id: trip.driverId } }),
     ]);
     if (vNow.status !== VehicleStatus.Available) {
       throw new BusinessRuleError(`Vehicle no longer available (${vNow.status})`);
@@ -116,13 +147,21 @@ export async function dispatchTrip(tripId: string) {
     if (dNow.status !== DriverStatus.Available) {
       throw new BusinessRuleError(`Driver no longer available (${dNow.status})`);
     }
+    if (isLicenseExpired(dNow.licenseExpiry)) {
+      throw new BusinessRuleError(`Driver ${dNow.name} has an expired license`);
+    }
+    if (trip.cargoWeight > vNow.maxLoad) {
+      throw new BusinessRuleError(
+        `Cargo weight ${trip.cargoWeight} kg exceeds max load ${vNow.maxLoad} kg`
+      );
+    }
 
     await tx.vehicle.update({
-      where: { id: vehicle.id },
+      where: { id: trip.vehicleId },
       data: { status: VehicleStatus.OnTrip },
     });
     await tx.driver.update({
-      where: { id: driver.id },
+      where: { id: trip.driverId },
       data: { status: DriverStatus.OnTrip },
     });
 
@@ -134,25 +173,72 @@ export async function dispatchTrip(tripId: string) {
   });
 }
 
+/**
+ * Complete trip: restore Available; optional final odometer + fuel consumed (workflow step 6).
+ */
 export async function completeTrip(
   tripId: string,
-  opts?: { distanceKm?: number; revenue?: number; notes?: string }
+  opts?: {
+    distanceKm?: number;
+    revenue?: number;
+    notes?: string;
+    /** Final odometer reading (updates vehicle) */
+    odometer?: number;
+    /** Fuel consumed on this trip (creates fuel log) */
+    fuelLiters?: number;
+    fuelCost?: number;
+  }
 ) {
   return prisma.$transaction(async (tx) => {
-    const trip = await tx.trip.findUnique({ where: { id: tripId } });
+    const trip = await tx.trip.findUnique({
+      where: { id: tripId },
+      include: { vehicle: true },
+    });
     if (!trip) throw new BusinessRuleError("Trip not found", 404);
     if (trip.status !== TripStatus.Dispatched) {
       throw new BusinessRuleError(`Cannot complete trip in status ${trip.status}`);
     }
 
+    const vehicleUpdate: { status: VehicleStatus; odometer?: number } = {
+      status: VehicleStatus.Available,
+    };
+
+    if (opts?.odometer != null) {
+      if (!Number.isFinite(opts.odometer) || opts.odometer < 0) {
+        throw new BusinessRuleError("Final odometer must be a number >= 0");
+      }
+      if (opts.odometer < trip.vehicle.odometer) {
+        throw new BusinessRuleError(
+          `Final odometer (${opts.odometer}) cannot be less than current vehicle odometer (${trip.vehicle.odometer})`
+        );
+      }
+      vehicleUpdate.odometer = opts.odometer;
+    }
+
     await tx.vehicle.update({
       where: { id: trip.vehicleId },
-      data: { status: VehicleStatus.Available },
+      data: vehicleUpdate,
     });
     await tx.driver.update({
       where: { id: trip.driverId },
       data: { status: DriverStatus.Available },
     });
+
+    // Workflow step 6: fuel consumed → fuel log (feeds reports efficiency/cost)
+    if (opts?.fuelLiters != null && opts.fuelLiters > 0) {
+      const cost =
+        opts.fuelCost != null && Number.isFinite(opts.fuelCost) ? opts.fuelCost : 0;
+      if (cost < 0) throw new BusinessRuleError("Fuel cost cannot be negative");
+      await tx.fuelLog.create({
+        data: {
+          vehicleId: trip.vehicleId,
+          liters: opts.fuelLiters,
+          cost,
+          date: new Date(),
+          odometer: opts.odometer ?? null,
+        },
+      });
+    }
 
     return tx.trip.update({
       where: { id: tripId },
@@ -177,6 +263,7 @@ export async function cancelTrip(tripId: string) {
       throw new BusinessRuleError(`Cannot cancel trip in status ${trip.status}`);
     }
 
+    // Cancelling a dispatched trip restores vehicle + driver to Available
     if (trip.status === TripStatus.Dispatched) {
       await tx.vehicle.update({
         where: { id: trip.vehicleId },
@@ -210,6 +297,9 @@ export async function openMaintenance(input: {
     if (vehicle.status === VehicleStatus.Retired) {
       throw new BusinessRuleError("Cannot open maintenance on a retired vehicle");
     }
+    if (vehicle.status === VehicleStatus.InShop) {
+      throw new BusinessRuleError("Vehicle is already In Shop");
+    }
 
     await tx.vehicle.update({
       where: { id: input.vehicleId },
@@ -237,6 +327,7 @@ export async function closeMaintenance(recordId: string) {
     }
 
     const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: record.vehicleId } });
+    // Closing maintenance restores Available unless retired
     if (vehicle.status !== VehicleStatus.Retired) {
       await tx.vehicle.update({
         where: { id: record.vehicleId },

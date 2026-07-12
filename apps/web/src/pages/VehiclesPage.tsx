@@ -25,9 +25,9 @@ export function VehiclesPage() {
   const [model, setModel] = useState("");
   const [type, setType] = useState("Van");
   const [region, setRegion] = useState("North");
-  const [maxLoad, setMaxLoad] = useState("500");
-  const [odometer, setOdometer] = useState("0");
-  const [acquisitionCost, setAcquisitionCost] = useState("25000");
+  const [maxLoad, setMaxLoad] = useState("");
+  const [odometer, setOdometer] = useState("");
+  const [acquisitionCost, setAcquisitionCost] = useState("");
   const canCreate = hasRole("FLEET_MANAGER", "DISPATCHER");
 
   async function load() {
@@ -56,12 +56,15 @@ export function VehiclesPage() {
           type,
           region,
           maxLoad: Number(maxLoad),
-          odometer: Number(odometer),
-          acquisitionCost: Number(acquisitionCost),
+          odometer: odometer === "" ? 0 : Number(odometer),
+          acquisitionCost: acquisitionCost === "" ? 0 : Number(acquisitionCost),
         }),
       });
       setReg("");
       setModel("");
+      setMaxLoad("");
+      setOdometer("");
+      setAcquisitionCost("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");

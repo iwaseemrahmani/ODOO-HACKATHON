@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import {
   IconChart,
   IconFuel,
   IconRoute,
-  IconSpark,
   IconTruck,
   IconUsers,
 } from "../components/Icons";
-import { Alert, LoadingBlock, PageHeader, Panel } from "../components/ui";
+import { Alert, EmptyState, LoadingBlock, PageHeader, Panel } from "../components/ui";
+import { StatusBadge } from "../components/StatusBadge";
 
 type Kpis = {
   totalVehicles: number;
@@ -27,185 +28,250 @@ type Kpis = {
   expensesThisMonth: number;
 };
 
-const trends = [
-  { label: "Trip completion", value: "+12%", positive: true },
-  { label: "Avg trip duration", value: "-8 min", positive: true },
-  { label: "Fuel efficiency", value: "+3.2 km/L", positive: true },
-  { label: "Maintenance cost", value: "+5%", positive: false },
-  { label: "On-time delivery", value: "94%", positive: true },
-  { label: "Driver utilization", value: "78%", positive: true },
-];
+type Trip = {
+  id: string;
+  origin: string;
+  destination: string;
+  status: string;
+  cargoWeight: number;
+  plannedDistance: number;
+  completedAt?: string | null;
+  createdAt: string;
+  vehicle?: { registrationNo: string };
+  driver?: { name: string };
+};
 
-const recentActivity = [
-  { time: "10 min ago", event: "Trip #T-1042 completed", detail: "Chennai → Bangalore" },
-  { time: "32 min ago", event: "Vehicle TN-01-AB-1234 entered shop", detail: "Scheduled brake service" },
-  { time: "1 hr ago", event: "New driver onboarded", detail: "Ravi Kumar — License DL-8821" },
-  { time: "2 hr ago", event: "Fuel refill logged", detail: "45 L · ₹3,825" },
-  { time: "3 hr ago", event: "Expense report filed", detail: "Toll & parking — ₹1,200" },
-];
-
-const monthlyStats = [
-  { month: "Jan", trips: 42, cost: 180000 },
-  { month: "Feb", trips: 38, cost: 165000 },
-  { month: "Mar", trips: 51, cost: 210000 },
-  { month: "Apr", trips: 47, cost: 195000 },
-  { month: "May", trips: 55, cost: 230000 },
-  { month: "Jun", trips: 44, cost: 188000 },
-];
+type ReportSummary = {
+  fleet: {
+    totalVehicles: number;
+    fleetUtilizationPercent: number;
+    totalOperationalCost: number;
+    avgFuelEfficiency: number | null;
+  };
+  vehicles: {
+    registrationNo: string;
+    operationalCost: number;
+    fuelEfficiency: number | null;
+    roiPercent: number | null;
+  }[];
+};
 
 export function AnalyticsPage() {
   const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [report, setReport] = useState<ReportSummary | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<Kpis>("/api/dashboard/kpis")
-      .then(setKpis)
-      .catch((e) => setError(e.message));
+    Promise.all([
+      api<Kpis>("/api/dashboard/kpis"),
+      api<Trip[]>("/api/trips"),
+      api<ReportSummary>("/api/reports/summary").catch(() => null),
+    ])
+      .then(([k, t, r]) => {
+        setKpis(k);
+        setTrips(t);
+        setReport(r);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }, []);
+
+  const recentTrips = useMemo(() => {
+    return [...trips]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, 8);
+  }, [trips]);
+
+  const completionRate = useMemo(() => {
+    if (!kpis) return null;
+    const done = kpis.completedTrips;
+    const total = done + kpis.activeTrips + kpis.pendingTrips;
+    if (total === 0) return null;
+    return Math.round((done / total) * 100);
+  }, [kpis]);
+
+  if (loading) return <LoadingBlock />;
 
   return (
     <div>
       <PageHeader
         title="Analytics"
-        subtitle="Performance metrics, trends, and operational insights."
+        subtitle="Live metrics from your fleet data — nothing is pre-filled."
+        action={
+          <Link to="/reports" className="btn-primary">
+            Full reports
+          </Link>
+        }
       />
 
       {error && <Alert type="error">{error}</Alert>}
 
-      {!kpis && !error && <LoadingBlock />}
+      {!kpis && !error && <EmptyState title="No data yet" hint="Register vehicles and run trips." />}
 
       {kpis && (
         <>
-          <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-up">
+          <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Stat
+              icon={<IconTruck className="w-4 h-4" />}
+              label="Vehicles"
+              value={String(kpis.totalVehicles)}
+              sub={`${kpis.availableVehicles} available`}
+            />
+            <Stat
+              icon={<IconRoute className="w-4 h-4" />}
+              label="Active trips"
+              value={String(kpis.activeTrips)}
+              sub={`${kpis.pendingTrips} draft`}
+            />
+            <Stat
+              icon={<IconUsers className="w-4 h-4" />}
+              label="Drivers on duty"
+              value={String(kpis.driversOnDuty)}
+              sub={`${kpis.totalDrivers} total`}
+            />
+            <Stat
+              icon={<IconChart className="w-4 h-4" />}
+              label="Utilization"
+              value={`${kpis.fleetUtilizationPercent}%`}
+              sub={
+                completionRate != null
+                  ? `${completionRate}% trips completed (of open pipeline)`
+                  : "No trips yet"
+              }
+            />
+          </div>
+
+          <div className="mb-6 grid sm:grid-cols-3 gap-4">
             <div className="card-elevated rounded-2xl p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md">
-                  <IconRoute className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-slate-900">{kpis.completedTrips}</div>
-                  <div className="text-xs text-slate-500">Trips completed</div>
-                </div>
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase">
+                <IconFuel className="w-4 h-4" /> Fuel this month
+              </div>
+              <div className="mt-2 text-2xl font-bold">
+                ₹{Number(kpis.fuelCostThisMonth).toFixed(0)}
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                {Number(kpis.fuelLitersThisMonth).toFixed(1)} L
               </div>
             </div>
             <div className="card-elevated rounded-2xl p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md">
-                  <IconTruck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-slate-900">{kpis.activeVehicles}</div>
-                  <div className="text-xs text-slate-500">Active vehicles</div>
-                </div>
+              <div className="text-xs font-semibold uppercase text-slate-500">Expenses this month</div>
+              <div className="mt-2 text-2xl font-bold">
+                ₹{Number(kpis.expensesThisMonth).toFixed(0)}
               </div>
             </div>
             <div className="card-elevated rounded-2xl p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md">
-                  <IconUsers className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-slate-900">{kpis.driversOnDuty}</div>
-                  <div className="text-xs text-slate-500">Drivers on duty</div>
-                </div>
+              <div className="text-xs font-semibold uppercase text-slate-500">
+                Ops cost (all-time fuel+maint)
               </div>
-            </div>
-            <div className="card-elevated rounded-2xl p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md">
-                  <IconFuel className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-slate-900">{kpis.fuelLitersThisMonth}</div>
-                  <div className="text-xs text-slate-500">Liters (month)</div>
-                </div>
+              <div className="mt-2 text-2xl font-bold">
+                {report
+                  ? `₹${Number(report.fleet.totalOperationalCost).toFixed(0)}`
+                  : "—"}
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                Avg efficiency:{" "}
+                {report?.fleet.avgFuelEfficiency != null
+                  ? `${report.fleet.avgFuelEfficiency.toFixed(2)} km/L`
+                  : "—"}
               </div>
             </div>
           </div>
 
-          <div className="mb-6 grid gap-6 lg:grid-cols-3 animate-fade-up stagger-2">
-            <Panel title="Trend summary" className="lg:col-span-2">
-              <div className="p-5">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {trends.map((t) => (
-                    <div key={t.label} className="rounded-xl bg-slate-50 p-3">
-                      <div className="text-xs text-slate-500">{t.label}</div>
-                      <div className={`mt-1 text-lg font-bold ${t.positive ? "text-emerald-700" : "text-rose-700"}`}>
-                        {t.value}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <Panel title="Recent trips" description="From your database">
+              {recentTrips.length === 0 ? (
+                <EmptyState title="No trips yet" hint="Create and dispatch trips to see activity." />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {recentTrips.map((t) => (
+                    <li key={t.id} className="px-5 py-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900 truncate">
+                          {t.origin} → {t.destination}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {t.vehicle?.registrationNo ?? "—"} · {t.driver?.name ?? "—"} ·{" "}
+                          {t.cargoWeight} kg · {t.plannedDistance} km
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {new Date(t.createdAt).toLocaleString()}
+                        </div>
                       </div>
-                    </div>
+                      <StatusBadge status={t.status} />
+                    </li>
                   ))}
+                </ul>
+              )}
+            </Panel>
+
+            <Panel title="Vehicle snapshot" description="Top by operational cost">
+              {!report || report.vehicles.length === 0 ? (
+                <EmptyState title="No vehicle cost data" hint="Add vehicles, fuel, and maintenance." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="table-shell">
+                    <thead>
+                      <tr>
+                        <th>Vehicle</th>
+                        <th>Ops cost</th>
+                        <th>Efficiency</th>
+                        <th>ROI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...report.vehicles]
+                        .sort((a, b) => b.operationalCost - a.operationalCost)
+                        .slice(0, 8)
+                        .map((v) => (
+                          <tr key={v.registrationNo}>
+                            <td className="font-mono font-semibold">{v.registrationNo}</td>
+                            <td>₹{Number(v.operationalCost).toFixed(0)}</td>
+                            <td>
+                              {v.fuelEfficiency != null
+                                ? `${v.fuelEfficiency.toFixed(2)} km/L`
+                                : "—"}
+                            </td>
+                            <td>
+                              {v.roiPercent != null ? `${v.roiPercent.toFixed(1)}%` : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            </Panel>
-
-            <Panel title="Monthly trend" description="Trips & cost (6 months)">
-              <div className="p-5 space-y-3">
-                {monthlyStats.map((m) => (
-                  <div key={m.month}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-medium text-slate-600">{m.month}</span>
-                      <span className="text-slate-400">{m.trips} trips</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all"
-                        style={{ width: `${(m.trips / 60) * 100}%` }}
-                      />
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      ₹{(m.cost / 1000).toFixed(0)}k
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2 animate-fade-up stagger-3">
-            <Panel title="Utilization breakdown">
-              <div className="p-5 space-y-5">
-                {[
-                  { label: "Fleet utilization", value: kpis.fleetUtilizationPercent, color: "bg-indigo-500" },
-                  { label: "Vehicles on trip", value: Math.round((kpis.activeVehicles / Math.max(kpis.totalVehicles, 1)) * 100), color: "bg-sky-500" },
-                  { label: "Drivers on duty", value: Math.round((kpis.driversOnDuty / Math.max(kpis.totalDrivers, 1)) * 100), color: "bg-violet-500" },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div className="flex items-center justify-between text-sm mb-1.5">
-                      <span className="font-medium text-slate-700">{item.label}</span>
-                      <span className="font-bold text-slate-900">{item.value}%</span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${item.color} transition-all duration-700`}
-                        style={{ width: `${Math.min(100, item.value)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-
-            <Panel title="Recent activity">
-              <div className="divide-y divide-slate-100">
-                {recentActivity.map((a, i) => (
-                  <div key={i} className="flex items-start gap-3 px-5 py-3.5">
-                    <div className="flex h-2 w-2 mt-1.5 shrink-0">
-                      <span className="absolute inline-flex h-2 w-2 rounded-full bg-indigo-400 opacity-40" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-slate-900">{a.event}</div>
-                      <div className="text-xs text-slate-500">{a.detail}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{a.time}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              )}
             </Panel>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: import("react").ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+}) {
+  return (
+    <div className="card-elevated rounded-2xl p-5">
+      <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wide">
+        {icon}
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-bold text-slate-900">{value}</div>
+      <div className="mt-0.5 text-xs text-slate-400">{sub}</div>
     </div>
   );
 }

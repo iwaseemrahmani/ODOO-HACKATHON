@@ -80,6 +80,17 @@ tripsRouter.post(
         distanceKm: req.body.distanceKm != null ? Number(req.body.distanceKm) : undefined,
         revenue: req.body.revenue != null ? Number(req.body.revenue) : undefined,
         notes: req.body.notes,
+        odometer: req.body.odometer != null && req.body.odometer !== ""
+          ? Number(req.body.odometer)
+          : undefined,
+        fuelLiters:
+          req.body.fuelLiters != null && req.body.fuelLiters !== ""
+            ? Number(req.body.fuelLiters)
+            : undefined,
+        fuelCost:
+          req.body.fuelCost != null && req.body.fuelCost !== ""
+            ? Number(req.body.fuelCost)
+            : undefined,
       });
       res.json(trip);
     } catch (err) {
@@ -146,11 +157,14 @@ maintenanceRouter.post(
 export const fuelRouter = Router();
 fuelRouter.use(requireAuth);
 
-fuelRouter.get("/", async (_req, res) => {
+fuelRouter.get("/", async (req, res) => {
+  const vehicleId =
+    typeof req.query.vehicleId === "string" ? req.query.vehicleId : undefined;
   const items = await prisma.fuelLog.findMany({
+    where: vehicleId ? { vehicleId } : undefined,
     orderBy: { date: "desc" },
     include: { vehicle: true },
-    take: 100,
+    take: 200,
   });
   res.json(items);
 });
@@ -160,14 +174,70 @@ fuelRouter.post(
   requireRole("FLEET_MANAGER", "FINANCIAL_ANALYST", "DISPATCHER"),
   async (req, res) => {
     try {
-      const item = await prisma.fuelLog.create({
-        data: {
-          vehicleId: req.body.vehicleId,
-          liters: Number(req.body.liters),
-          cost: Number(req.body.cost),
-          date: req.body.date ? new Date(req.body.date) : new Date(),
-          odometer: req.body.odometer != null ? Number(req.body.odometer) : null,
-        },
+      const vehicleId = req.body.vehicleId as string | undefined;
+      const liters = Number(req.body.liters);
+      const cost = Number(req.body.cost);
+      if (!vehicleId) {
+        return res.status(400).json({ error: "Vehicle is required for fuel logs" });
+      }
+      if (!Number.isFinite(liters) || liters <= 0) {
+        return res.status(400).json({ error: "Liters must be a number greater than 0" });
+      }
+      if (!Number.isFinite(cost) || cost < 0) {
+        return res.status(400).json({ error: "Cost must be a number >= 0" });
+      }
+      const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+      if (!vehicle) {
+        return res.status(404).json({ error: "Vehicle not found" });
+      }
+      if (vehicle.status === "Retired") {
+        return res.status(400).json({
+          error: "Cannot log fuel for a retired vehicle",
+        });
+      }
+
+      const date = req.body.date ? new Date(req.body.date) : new Date();
+      if (Number.isNaN(date.getTime())) {
+        return res.status(400).json({ error: "Invalid date" });
+      }
+      // Disallow far-future dates (edge case)
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (date > tomorrow) {
+        return res.status(400).json({ error: "Fuel date cannot be in the future" });
+      }
+
+      const odometer =
+        req.body.odometer != null && req.body.odometer !== ""
+          ? Number(req.body.odometer)
+          : null;
+      if (odometer != null && (!Number.isFinite(odometer) || odometer < 0)) {
+        return res.status(400).json({ error: "Odometer must be >= 0" });
+      }
+      if (odometer != null && odometer < vehicle.odometer) {
+        return res.status(400).json({
+          error: `Odometer (${odometer}) cannot be less than vehicle current odometer (${vehicle.odometer})`,
+        });
+      }
+
+      const item = await prisma.$transaction(async (tx) => {
+        const log = await tx.fuelLog.create({
+          data: {
+            vehicleId,
+            liters,
+            cost,
+            date,
+            odometer,
+          },
+          include: { vehicle: true },
+        });
+        if (odometer != null) {
+          await tx.vehicle.update({
+            where: { id: vehicleId },
+            data: { odometer },
+          });
+        }
+        return log;
       });
       res.status(201).json(item);
     } catch (err) {
@@ -180,29 +250,74 @@ fuelRouter.post(
 export const expensesRouter = Router();
 expensesRouter.use(requireAuth);
 
-expensesRouter.get("/", async (_req, res) => {
+expensesRouter.get("/", async (req, res) => {
+  const vehicleId =
+    typeof req.query.vehicleId === "string" ? req.query.vehicleId : undefined;
   const items = await prisma.expense.findMany({
+    where: vehicleId ? { vehicleId } : undefined,
     orderBy: { date: "desc" },
     include: { vehicle: true, trip: true },
-    take: 100,
+    take: 200,
   });
   res.json(items);
 });
 
 expensesRouter.post(
   "/",
-  requireRole("FINANCIAL_ANALYST", "FLEET_MANAGER"),
+  requireRole("FINANCIAL_ANALYST", "FLEET_MANAGER", "DISPATCHER"),
   async (req, res) => {
     try {
+      const type = String(req.body.type || "").trim();
+      const amount = Number(req.body.amount);
+      if (!type) {
+        return res.status(400).json({ error: "Expense type is required" });
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ error: "Amount must be greater than 0" });
+      }
+
+      let vehicleId: string | null = req.body.vehicleId || null;
+      if (vehicleId) {
+        const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+        if (!vehicle) {
+          return res.status(404).json({ error: "Vehicle not found" });
+        }
+        if (vehicle.status === "Retired") {
+          return res.status(400).json({
+            error: "Cannot attach expense to a retired vehicle",
+          });
+        }
+      }
+
+      // Maintenance-type expenses should be linked to a vehicle (ops cost per vehicle)
+      if (type.toLowerCase() === "maintenance" && !vehicleId) {
+        return res.status(400).json({
+          error: "Maintenance expenses must be linked to a vehicle",
+        });
+      }
+
+      const date = req.body.date ? new Date(req.body.date) : new Date();
+      if (Number.isNaN(date.getTime())) {
+        return res.status(400).json({ error: "Invalid date" });
+      }
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (date > tomorrow) {
+        return res.status(400).json({ error: "Expense date cannot be in the future" });
+      }
+
       const item = await prisma.expense.create({
         data: {
-          vehicleId: req.body.vehicleId || null,
+          vehicleId,
           tripId: req.body.tripId || null,
-          type: String(req.body.type),
-          amount: Number(req.body.amount),
-          date: req.body.date ? new Date(req.body.date) : new Date(),
-          description: req.body.description ?? null,
+          type,
+          amount,
+          date,
+          description: req.body.description
+            ? String(req.body.description).trim()
+            : null,
         },
+        include: { vehicle: true },
       });
       res.status(201).json(item);
     } catch (err) {
@@ -211,3 +326,4 @@ expensesRouter.post(
     }
   }
 );
+

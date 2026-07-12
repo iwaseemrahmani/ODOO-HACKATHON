@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
 import { Alert, EmptyState, Label, LoadingBlock, PageHeader, Panel } from "../components/ui";
@@ -9,22 +9,9 @@ type Record = {
   description: string;
   cost: number;
   status: string;
+  openedAt?: string;
   vehicle?: Vehicle;
-  date?: string;
 };
-
-const mockSchedule = [
-  { id: "1", vehicle: "TN-01-AB-1234", service: "Oil change", dueIn: "2 days", priority: "high" },
-  { id: "2", vehicle: "TN-01-CD-5678", service: "Brake inspection", dueIn: "1 week", priority: "medium" },
-  { id: "3", vehicle: "TN-01-EF-9012", service: "Tire rotation", dueIn: "3 weeks", priority: "low" },
-];
-
-const statusCards = [
-  { label: "Operational", count: 8, color: "bg-emerald-500", bg: "bg-emerald-50", text: "text-emerald-800" },
-  { label: "In shop", count: 3, color: "bg-amber-500", bg: "bg-amber-50", text: "text-amber-800" },
-  { label: "Overdue service", count: 2, color: "bg-rose-500", bg: "bg-rose-50", text: "text-rose-800" },
-  { label: "Scheduled", count: 5, color: "bg-sky-500", bg: "bg-sky-50", text: "text-sky-800" },
-];
 
 export function MaintenancePage() {
   const [items, setItems] = useState<Record[]>([]);
@@ -35,15 +22,31 @@ export function MaintenancePage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const stats = useMemo(() => {
+    const available = vehicles.filter((v) => v.status === "Available").length;
+    const inShop = vehicles.filter((v) => v.status === "InShop").length;
+    const openJobs = items.filter((i) => i.status === "Open").length;
+    const closedJobs = items.filter((i) => i.status === "Closed").length;
+    return { available, inShop, openJobs, closedJobs };
+  }, [vehicles, items]);
+
+  const openable = useMemo(
+    () => vehicles.filter((v) => v.status === "Available"),
+    [vehicles]
+  );
+
   async function load() {
     try {
       const [m, v] = await Promise.all([
-        api<Record[]>("/api/maintenance").catch(() => [] as Record[]),
-        api<Vehicle[]>("/api/vehicles").catch(() => [] as Vehicle[]),
+        api<Record[]>("/api/maintenance"),
+        api<Vehicle[]>("/api/vehicles"),
       ]);
       setItems(m);
       setVehicles(v);
-      if (!vehicleId && v[0]) setVehicleId(v[0].id);
+      const open = v.filter((x) => x.status === "Available");
+      setVehicleId((prev) =>
+        prev && open.some((x) => x.id === prev) ? prev : open[0]?.id || ""
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -58,10 +61,18 @@ export function MaintenancePage() {
   async function onOpen(e: FormEvent) {
     e.preventDefault();
     setError("");
+    if (!vehicleId) {
+      setError("Select an Available vehicle.");
+      return;
+    }
     try {
       await api("/api/maintenance", {
         method: "POST",
-        body: JSON.stringify({ vehicleId, description, cost: Number(cost) }),
+        body: JSON.stringify({
+          vehicleId,
+          description,
+          cost: cost === "" ? 0 : Number(cost),
+        }),
       });
       setDescription("");
       setCost("");
@@ -81,16 +92,23 @@ export function MaintenancePage() {
     }
   }
 
+  const cards = [
+    { label: "Available", count: stats.available, color: "bg-emerald-500", bg: "bg-emerald-50", text: "text-emerald-800" },
+    { label: "In shop", count: stats.inShop, color: "bg-amber-500", bg: "bg-amber-50", text: "text-amber-800" },
+    { label: "Open jobs", count: stats.openJobs, color: "bg-sky-500", bg: "bg-sky-50", text: "text-sky-800" },
+    { label: "Closed jobs", count: stats.closedJobs, color: "bg-slate-400", bg: "bg-slate-50", text: "text-slate-700" },
+  ];
+
   return (
     <div>
       <PageHeader
         title="Maintenance"
-        subtitle="Vehicle upkeep, service scheduling, and maintenance logs."
+        subtitle="Open a job to set a vehicle In Shop. Close to restore Available."
       />
       {error && <Alert type="error">{error}</Alert>}
 
-      <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-up">
-        {statusCards.map((c) => (
+      <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {cards.map((c) => (
           <div key={c.label} className={`card-elevated rounded-2xl p-4 ${c.bg}`}>
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${c.color}`} />
@@ -101,67 +119,95 @@ export function MaintenancePage() {
         ))}
       </div>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2 animate-fade-up stagger-2">
-        <Panel title="Service schedule" description="Upcoming maintenance by vehicle">
-          <div className="divide-y divide-slate-100">
-            {mockSchedule.map((s) => (
-              <div key={s.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">{s.vehicle}</div>
-                  <div className="text-xs text-slate-500">{s.service}</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400">{s.dueIn}</span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${
-                      s.priority === "high"
-                        ? "bg-rose-50 text-rose-700 ring-rose-600/20"
-                        : s.priority === "medium"
-                          ? "bg-amber-50 text-amber-700 ring-amber-600/20"
-                          : "bg-sky-50 text-sky-700 ring-sky-600/20"
-                    }`}
-                  >
-                    {s.priority}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel title="Open job" description="Log new maintenance work">
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <Panel title="Open job" description="Sets vehicle status to In Shop">
           <form onSubmit={onOpen} className="p-5 space-y-4">
             <div>
-              <Label>Vehicle</Label>
-              <select className="input-field" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-                {vehicles.length === 0 && <option value="">No vehicles</option>}
-                {vehicles.map((v) => (
+              <Label>Vehicle (Available only)</Label>
+              <select
+                className="input-field"
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                required
+              >
+                {openable.length === 0 && <option value="">No Available vehicles</option>}
+                {openable.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.registrationNo} ({v.status})
+                    {v.registrationNo}
                   </option>
                 ))}
               </select>
             </div>
             <div>
               <Label>Work description</Label>
-              <input className="input-field" value={description} onChange={(e) => setDescription(e.target.value)} required placeholder="e.g. Brake pad replacement" />
+              <input
+                className="input-field"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+                placeholder="Description"
+              />
             </div>
             <div>
               <Label>Cost (₹)</Label>
-              <input type="number" className="input-field" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
+              <input
+                type="number"
+                min="0"
+                className="input-field"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="0"
+              />
             </div>
-            <button type="submit" className="btn-primary w-full justify-center">
+            <button
+              type="submit"
+              className="btn-primary w-full justify-center"
+              disabled={!vehicleId}
+            >
               Open job
             </button>
           </form>
         </Panel>
+
+        <Panel title="Open jobs" description="Active maintenance (In Shop)">
+          {loading ? (
+            <LoadingBlock />
+          ) : items.filter((i) => i.status === "Open").length === 0 ? (
+            <EmptyState title="No open jobs" hint="Open a job when a vehicle needs service." />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {items
+                .filter((i) => i.status === "Open")
+                .map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <div className="font-mono text-sm font-semibold">
+                        {r.vehicle?.registrationNo ?? "—"}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">{r.description}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold">₹{r.cost}</span>
+                      <button
+                        type="button"
+                        className="btn-ghost btn-success"
+                        onClick={() => onClose(r.id)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </Panel>
       </div>
 
-      <Panel className="animate-fade-up stagger-3" title="Maintenance logs" description="Recent and historical service records">
+      <Panel title="Maintenance log" description="All records from the database">
         {loading ? (
           <LoadingBlock />
         ) : items.length === 0 ? (
-          <EmptyState title="No maintenance records" hint="Open a job when a vehicle needs service." />
+          <EmptyState title="No maintenance records" hint="Nothing logged yet." />
         ) : (
           <div className="overflow-x-auto">
             <table className="table-shell">
@@ -177,13 +223,21 @@ export function MaintenancePage() {
               <tbody>
                 {items.map((r) => (
                   <tr key={r.id}>
-                    <td className="font-mono text-xs font-semibold">{r.vehicle?.registrationNo || "—"}</td>
+                    <td className="font-mono text-xs font-semibold">
+                      {r.vehicle?.registrationNo || "—"}
+                    </td>
                     <td>{r.description}</td>
-                    <td className="font-semibold text-slate-800">₹{r.cost}</td>
-                    <td><StatusBadge status={r.status} /></td>
+                    <td className="font-semibold">₹{r.cost}</td>
+                    <td>
+                      <StatusBadge status={r.status} />
+                    </td>
                     <td>
                       {r.status === "Open" && (
-                        <button type="button" className="btn-ghost btn-success" onClick={() => onClose(r.id)}>
+                        <button
+                          type="button"
+                          className="btn-ghost btn-success"
+                          onClick={() => onClose(r.id)}
+                        >
                           Close job
                         </button>
                       )}
