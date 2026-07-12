@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, type AuthedRequest } from "../middleware/auth";
 import { requireRole } from "../middleware/rbac";
 import {
   BusinessRuleError,
@@ -23,25 +23,45 @@ function handleRuleError(res: import("express").Response, err: unknown) {
   return res.status(500).json({ error: "Request failed" });
 }
 
+function serializeTrip(item: {
+  vehicle?: { region?: { name: string } | null; [k: string]: unknown } | null;
+  [k: string]: unknown;
+}) {
+  if (!item.vehicle) return item;
+  const { region, ...rest } = item.vehicle as {
+    region?: { name: string } | null;
+    [k: string]: unknown;
+  };
+  return {
+    ...item,
+    vehicle: {
+      ...rest,
+      region: region?.name ?? (typeof region === "string" ? region : ""),
+    },
+  };
+}
+
 tripsRouter.get("/", async (_req, res) => {
   const items = await prisma.trip.findMany({
     orderBy: { createdAt: "desc" },
-    include: { vehicle: true, driver: true },
+    include: { vehicle: { include: { region: true } }, driver: true },
+    take: 300,
   });
-  res.json(items);
+  res.json(items.map(serializeTrip));
 });
 
 tripsRouter.get("/:id", async (req, res) => {
   const item = await prisma.trip.findUnique({
     where: { id: req.params.id },
-    include: { vehicle: true, driver: true },
+    include: { vehicle: { include: { region: true } }, driver: true },
   });
   if (!item) return res.status(404).json({ error: "Trip not found" });
-  res.json(item);
+  res.json(serializeTrip(item));
 });
 
 tripsRouter.post("/", requireRole("DISPATCHER", "FLEET_MANAGER"), async (req, res) => {
   try {
+    const authReq = req as AuthedRequest;
     const trip = await createTrip({
       vehicleId: req.body.vehicleId,
       driverId: req.body.driverId,
@@ -51,8 +71,11 @@ tripsRouter.post("/", requireRole("DISPATCHER", "FLEET_MANAGER"), async (req, re
       plannedDistance: Number(req.body.plannedDistance),
       scheduledAt: req.body.scheduledAt,
       notes: req.body.notes,
+      priority: req.body.priority,
+      revenue: req.body.revenue != null ? Number(req.body.revenue) : undefined,
+      dispatcherId: authReq.user?.userId,
     });
-    res.status(201).json(trip);
+    res.status(201).json(serializeTrip(trip));
   } catch (err) {
     return handleRuleError(res, err);
   }

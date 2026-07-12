@@ -57,14 +57,41 @@ driversRouter.post(
   }
 );
 
+const DRIVER_STATUSES = new Set(["Available", "OnTrip", "OffDuty", "Suspended"]);
+
 driversRouter.put(
   "/:id",
   requireRole("FLEET_MANAGER", "SAFETY_OFFICER"),
   async (req, res) => {
     try {
-      const data = { ...req.body };
-      if (data.licenseExpiry) data.licenseExpiry = new Date(data.licenseExpiry);
-      if (data.safetyScore != null) data.safetyScore = Number(data.safetyScore);
+      const existing = await prisma.driver.findUnique({ where: { id: req.params.id } });
+      if (!existing) return res.status(404).json({ error: "Driver not found" });
+
+      const data: Record<string, unknown> = {};
+      const body = req.body;
+      if (body.name != null) data.name = String(body.name).trim();
+      if (body.licenseNo != null) data.licenseNo = String(body.licenseNo).trim();
+      if (body.licenseCategory != null) data.licenseCategory = String(body.licenseCategory).trim();
+      if (body.phone !== undefined) data.phone = body.phone;
+      if (body.licenseExpiry) data.licenseExpiry = new Date(body.licenseExpiry);
+      if (body.safetyScore != null) data.safetyScore = Number(body.safetyScore);
+      if (body.status != null) {
+        if (!DRIVER_STATUSES.has(body.status)) {
+          return res.status(400).json({ error: "Invalid driver status" });
+        }
+        // OnTrip is owned by trip dispatch/complete — block manual set
+        if (body.status === "OnTrip") {
+          return res.status(400).json({
+            error: "Set OnTrip via trip dispatch, not manually",
+          });
+        }
+        if (existing.status === "OnTrip" && body.status !== "OnTrip") {
+          return res.status(400).json({
+            error: "Driver is On Trip — complete or cancel the trip first",
+          });
+        }
+        data.status = body.status;
+      }
       const item = await prisma.driver.update({
         where: { id: req.params.id },
         data,

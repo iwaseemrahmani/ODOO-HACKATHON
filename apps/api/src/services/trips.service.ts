@@ -79,6 +79,8 @@ function assertDriverAssignable(driver: {
 /**
  * Mandatory business rules for trip lifecycle (brief §4).
  */
+const TRIP_PRIORITIES = new Set(["Low", "Medium", "High", "Critical"]);
+
 export async function createTrip(input: {
   vehicleId: string;
   driverId: string;
@@ -88,6 +90,9 @@ export async function createTrip(input: {
   plannedDistance: number;
   scheduledAt?: string;
   notes?: string;
+  priority?: string;
+  dispatcherId?: string;
+  revenue?: number;
 }) {
   if (!input.origin?.trim() || !input.destination?.trim()) {
     throw new BusinessRuleError("Source and destination are required");
@@ -113,20 +118,31 @@ export async function createTrip(input: {
   assertVehicleAssignable(vehicle, input.cargoWeight);
   assertDriverAssignable(driver);
 
+  const priority =
+    input.priority && TRIP_PRIORITIES.has(input.priority)
+      ? (input.priority as "Low" | "Medium" | "High" | "Critical")
+      : "Medium";
+
   return prisma.trip.create({
     data: {
       tripCode: makeTripCode(),
       vehicleId: input.vehicleId,
       driverId: input.driverId,
+      dispatcherId: input.dispatcherId || null,
       origin: input.origin.trim(),
       destination: input.destination.trim(),
       cargoWeight: input.cargoWeight,
       plannedDistance: input.plannedDistance,
       scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : new Date(),
-      notes: input.notes,
+      notes: input.notes?.trim() || null,
+      priority,
+      revenue:
+        input.revenue != null && Number.isFinite(input.revenue) && input.revenue >= 0
+          ? input.revenue
+          : 0,
       status: TripStatus.Draft,
     },
-    include: { vehicle: true, driver: true },
+    include: { vehicle: { include: { region: true } }, driver: true },
   });
 }
 

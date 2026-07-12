@@ -41,7 +41,18 @@ type ReportSummary = {
   }[];
 };
 
-const EXPENSE_TYPES = ["Toll", "Maintenance", "Parking", "Fine", "Insurance", "Other"];
+/** Matches Prisma ExpenseCategory (+ a few UI aliases mapped server-side) */
+const EXPENSE_TYPES = [
+  "Toll",
+  "Maintenance",
+  "Fuel",
+  "DriverAllowance",
+  "Fine",
+  "Repair",
+  "Other",
+  "Parking",
+  "Insurance",
+];
 
 function todayInputValue() {
   const d = new Date();
