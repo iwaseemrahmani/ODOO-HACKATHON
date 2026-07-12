@@ -96,10 +96,10 @@ export function VehiclesPage() {
             <div>
               <Label>Type</Label>
               <select className="input-field" value={type} onChange={(e) => setType(e.target.value)}>
-                <option>Van</option>
-                <option>Truck</option>
-                <option>Bus</option>
-                <option>Car</option>
+                <option value="Van">Van</option>
+                <option value="Truck">Truck</option>
+                <option value="MiniTruck">MiniTruck</option>
+                <option value="Trailer">Trailer</option>
               </select>
             </div>
             <div>

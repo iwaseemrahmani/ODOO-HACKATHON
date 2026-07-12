@@ -163,10 +163,21 @@ fuelRouter.get("/", async (req, res) => {
   const items = await prisma.fuelLog.findMany({
     where: vehicleId ? { vehicleId } : undefined,
     orderBy: { date: "desc" },
-    include: { vehicle: true },
+    include: { vehicle: { include: { region: true } } },
     take: 200,
   });
-  res.json(items);
+  res.json(
+    items.map((item) => ({
+      ...item,
+      vehicle: item.vehicle
+        ? {
+            ...item.vehicle,
+            region: item.vehicle.region?.name ?? "",
+            type: item.vehicle.type,
+          }
+        : undefined,
+    }))
+  );
 });
 
 fuelRouter.post(
@@ -256,10 +267,22 @@ expensesRouter.get("/", async (req, res) => {
   const items = await prisma.expense.findMany({
     where: vehicleId ? { vehicleId } : undefined,
     orderBy: { date: "desc" },
-    include: { vehicle: true, trip: true },
+    include: { vehicle: { include: { region: true } }, trip: true },
     take: 200,
   });
-  res.json(items);
+  res.json(
+    items.map((item) => ({
+      ...item,
+      type: item.category,
+      vehicle: item.vehicle
+        ? {
+            ...item.vehicle,
+            region: item.vehicle.region?.name ?? "",
+            type: item.vehicle.type,
+          }
+        : null,
+    }))
+  );
 });
 
 expensesRouter.post(
@@ -289,13 +312,6 @@ expensesRouter.post(
         }
       }
 
-      // Maintenance-type expenses should be linked to a vehicle (ops cost per vehicle)
-      if (type.toLowerCase() === "maintenance" && !vehicleId) {
-        return res.status(400).json({
-          error: "Maintenance expenses must be linked to a vehicle",
-        });
-      }
-
       const date = req.body.date ? new Date(req.body.date) : new Date();
       if (Number.isNaN(date.getTime())) {
         return res.status(400).json({ error: "Invalid date" });
@@ -306,20 +322,31 @@ expensesRouter.post(
         return res.status(400).json({ error: "Expense date cannot be in the future" });
       }
 
+      const { mapExpenseCategory } = await import("../lib/region");
+      const category = mapExpenseCategory(type);
+
+      // Maintenance-type expenses should be linked to a vehicle
+      if (category === "Maintenance" && !vehicleId) {
+        return res.status(400).json({
+          error: "Maintenance expenses must be linked to a vehicle",
+        });
+      }
+
       const item = await prisma.expense.create({
         data: {
           vehicleId,
           tripId: req.body.tripId || null,
-          type,
+          category,
           amount,
           date,
           description: req.body.description
             ? String(req.body.description).trim()
-            : null,
+            : type,
         },
         include: { vehicle: true },
       });
-      res.status(201).json(item);
+      // Keep frontend-compatible shape
+      res.status(201).json({ ...item, type: item.category });
     } catch (err) {
       console.error(err);
       res.status(400).json({ error: "Create expense failed" });

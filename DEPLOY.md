@@ -35,6 +35,7 @@ No Render disk needed.
 | **Runtime** | Node |
 | **Build Command** | `pnpm install && pnpm exec prisma generate && pnpm build` |
 | **Start Command** | `pnpm start` |
+| | (`prisma db push` then `node dist/index.js` — keeps Neon schema in sync) |
 | **Plan** | Free |
 
 If `pnpm` missing on build:

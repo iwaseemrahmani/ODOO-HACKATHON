@@ -1,10 +1,16 @@
 import {
   DriverStatus,
+  MaintenanceStatus,
+  MaintenanceType,
   Prisma,
   TripStatus,
   VehicleStatus,
 } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+
+function makeTripCode() {
+  return `TRP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
 
 export class BusinessRuleError extends Error {
   status: number;
@@ -109,6 +115,7 @@ export async function createTrip(input: {
 
   return prisma.trip.create({
     data: {
+      tripCode: makeTripCode(),
       vehicleId: input.vehicleId,
       driverId: input.driverId,
       origin: input.origin.trim(),
@@ -287,6 +294,7 @@ export async function openMaintenance(input: {
   vehicleId: string;
   description: string;
   cost?: number;
+  maintenanceType?: MaintenanceType;
 }) {
   return prisma.$transaction(async (tx) => {
     const vehicle = await tx.vehicle.findUnique({ where: { id: input.vehicleId } });
@@ -306,12 +314,14 @@ export async function openMaintenance(input: {
       data: { status: VehicleStatus.InShop },
     });
 
+    // Schema enum: ToShop | Scheduled | InShop | Closed (not "Open")
     return tx.maintenanceRecord.create({
       data: {
         vehicleId: input.vehicleId,
         description: input.description,
         cost: input.cost ?? 0,
-        status: "Open",
+        maintenanceType: input.maintenanceType ?? MaintenanceType.Service,
+        status: MaintenanceStatus.InShop,
       },
       include: { vehicle: true },
     });
@@ -322,12 +332,11 @@ export async function closeMaintenance(recordId: string) {
   return prisma.$transaction(async (tx) => {
     const record = await tx.maintenanceRecord.findUnique({ where: { id: recordId } });
     if (!record) throw new BusinessRuleError("Maintenance record not found", 404);
-    if (record.status === "Closed") {
+    if (record.status === MaintenanceStatus.Closed) {
       throw new BusinessRuleError("Maintenance already closed");
     }
 
     const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: record.vehicleId } });
-    // Closing maintenance restores Available unless retired
     if (vehicle.status !== VehicleStatus.Retired) {
       await tx.vehicle.update({
         where: { id: record.vehicleId },
@@ -337,7 +346,7 @@ export async function closeMaintenance(recordId: string) {
 
     return tx.maintenanceRecord.update({
       where: { id: recordId },
-      data: { status: "Closed", closedAt: new Date() },
+      data: { status: MaintenanceStatus.Closed, closedAt: new Date() },
       include: { vehicle: true },
     });
   });

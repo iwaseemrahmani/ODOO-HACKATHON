@@ -8,7 +8,10 @@ reportsRouter.use(requireAuth);
 reportsRouter.use(requireRole("FLEET_MANAGER", "FINANCIAL_ANALYST", "DISPATCHER"));
 
 async function buildVehicleReport() {
-  const vehicles = await prisma.vehicle.findMany({ orderBy: { registrationNo: "asc" } });
+  const vehicles = await prisma.vehicle.findMany({
+    orderBy: { registrationNo: "asc" },
+    include: { region: true },
+  });
 
   const rows = await Promise.all(
     vehicles.map(async (v) => {
@@ -48,7 +51,7 @@ async function buildVehicleReport() {
         registrationNo: v.registrationNo,
         model: v.model,
         type: v.type,
-        region: v.region,
+        region: v.region?.name ?? "",
         status: v.status,
         acquisitionCost: v.acquisitionCost,
         fuelCost,

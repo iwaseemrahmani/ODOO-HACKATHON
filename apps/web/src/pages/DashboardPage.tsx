@@ -124,8 +124,8 @@ export function DashboardPage() {
               <option value="">All types</option>
               <option value="Van">Van</option>
               <option value="Truck">Truck</option>
-              <option value="Bus">Bus</option>
-              <option value="Car">Car</option>
+              <option value="MiniTruck">MiniTruck</option>
+              <option value="Trailer">Trailer</option>
             </select>
           </div>
           <div>

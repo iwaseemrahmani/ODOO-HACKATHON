@@ -25,7 +25,7 @@ export function MaintenancePage() {
   const stats = useMemo(() => {
     const available = vehicles.filter((v) => v.status === "Available").length;
     const inShop = vehicles.filter((v) => v.status === "InShop").length;
-    const openJobs = items.filter((i) => i.status === "Open").length;
+    const openJobs = items.filter((i) => i.status !== "Closed").length;
     const closedJobs = items.filter((i) => i.status === "Closed").length;
     return { available, inShop, openJobs, closedJobs };
   }, [vehicles, items]);
@@ -172,12 +172,12 @@ export function MaintenancePage() {
         <Panel title="Open jobs" description="Active maintenance (In Shop)">
           {loading ? (
             <LoadingBlock />
-          ) : items.filter((i) => i.status === "Open").length === 0 ? (
+          ) : items.filter((i) => i.status !== "Closed").length === 0 ? (
             <EmptyState title="No open jobs" hint="Open a job when a vehicle needs service." />
           ) : (
             <ul className="divide-y divide-slate-100">
               {items
-                .filter((i) => i.status === "Open")
+                .filter((i) => i.status !== "Closed")
                 .map((r) => (
                   <li key={r.id} className="flex items-center justify-between gap-3 px-5 py-3">
                     <div className="min-w-0">
@@ -232,7 +232,7 @@ export function MaintenancePage() {
                       <StatusBadge status={r.status} />
                     </td>
                     <td>
-                      {r.status === "Open" && (
+                      {r.status !== "Closed" && (
                         <button
                           type="button"
                           className="btn-ghost btn-success"

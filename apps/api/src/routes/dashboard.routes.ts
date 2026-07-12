@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { Router } from "express";
+import { mapVehicleType } from "../lib/region";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
 
@@ -9,16 +10,22 @@ dashboardRouter.use(requireAuth);
 function vehicleWhere(req: { query: Record<string, unknown> }): Prisma.VehicleWhereInput {
   const where: Prisma.VehicleWhereInput = {};
   if (typeof req.query.type === "string" && req.query.type.trim()) {
-    where.type = req.query.type.trim();
+    where.type = mapVehicleType(req.query.type);
   }
   if (typeof req.query.status === "string" && req.query.status.trim()) {
     where.status = req.query.status.trim() as Prisma.EnumVehicleStatusFilter["equals"];
   }
   if (typeof req.query.region === "string" && req.query.region.trim()) {
-    where.region = req.query.region.trim();
+    // region is a relation, not a string column
+    where.region = { name: req.query.region.trim() };
   }
   return where;
 }
+
+/** Active maintenance jobs (not Closed) */
+const OPEN_MAINTENANCE: Prisma.EnumMaintenanceStatusFilter = {
+  in: ["ToShop", "Scheduled", "InShop"],
+};
 
 dashboardRouter.get("/kpis", async (req, res) => {
   try {
@@ -78,7 +85,7 @@ dashboardRouter.get("/kpis", async (req, res) => {
       }),
       prisma.maintenanceRecord.count({
         where: {
-          status: "Open",
+          status: OPEN_MAINTENANCE,
           ...(hasVehicleFilter
             ? { vehicleId: { in: vehicleIds.length ? vehicleIds : ["__none__"] } }
             : {}),
@@ -113,9 +120,9 @@ dashboardRouter.get("/kpis", async (req, res) => {
   } catch (err) {
     console.error("Dashboard KPIs failed:", err);
     res.status(503).json({
-      error: "Database unavailable",
+      error: "Database unavailable or schema mismatch",
       message:
-        "Cannot reach Neon. Wake the project in console.neon.tech, check DATABASE_URL, then retry.",
+        "Run prisma db push against Neon (or redeploy with start:prod). Check DATABASE_URL.",
     });
   }
 });
