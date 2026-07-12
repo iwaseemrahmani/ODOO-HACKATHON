@@ -26,9 +26,11 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
 
   if (res.status === 204) return undefined as T;
 
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || res.statusText || "Request failed");
+    const body = data as { error?: string; message?: string };
+    const detail = [body.error, body.message].filter(Boolean).join(" — ");
+    throw new Error(detail || res.statusText || "Request failed");
   }
   return data as T;
 }

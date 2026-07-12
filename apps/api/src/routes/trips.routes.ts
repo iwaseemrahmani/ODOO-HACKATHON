@@ -119,40 +119,51 @@ maintenanceRouter.use(requireAuth);
 maintenanceRouter.get("/", async (_req, res) => {
   const items = await prisma.maintenanceRecord.findMany({
     orderBy: { openedAt: "desc" },
-    include: { vehicle: true },
+    include: { vehicle: { include: { region: true } } },
+    take: 300,
   });
-  res.json(items);
+  res.json(
+    items.map((item) => ({
+      ...item,
+      vehicle: item.vehicle
+        ? {
+            ...item.vehicle,
+            region: item.vehicle.region?.name ?? "",
+          }
+        : undefined,
+    })),
+  );
 });
 
-maintenanceRouter.post(
-  "/",
-  requireRole("FLEET_MANAGER"),
-  async (req, res) => {
-    try {
-      const record = await openMaintenance({
-        vehicleId: req.body.vehicleId,
-        description: req.body.description,
-        cost: req.body.cost != null ? Number(req.body.cost) : undefined,
-      });
-      res.status(201).json(record);
-    } catch (err) {
-      return handleRuleError(res, err);
-    }
-  }
+// Match Maintenance nav: Fleet Manager, Dispatcher, Safety Officer
+const canManageMaintenance = requireRole(
+  "FLEET_MANAGER",
+  "DISPATCHER",
+  "SAFETY_OFFICER",
 );
 
-maintenanceRouter.post(
-  "/:id/close",
-  requireRole("FLEET_MANAGER"),
-  async (req, res) => {
-    try {
-      const record = await closeMaintenance(req.params.id);
-      res.json(record);
-    } catch (err) {
-      return handleRuleError(res, err);
-    }
+maintenanceRouter.post("/", canManageMaintenance, async (req, res) => {
+  try {
+    const record = await openMaintenance({
+      vehicleId: req.body.vehicleId,
+      description: req.body.description,
+      cost: req.body.cost != null ? Number(req.body.cost) : undefined,
+      maintenanceType: req.body.maintenanceType,
+    });
+    res.status(201).json(record);
+  } catch (err) {
+    return handleRuleError(res, err);
   }
-);
+});
+
+maintenanceRouter.post("/:id/close", canManageMaintenance, async (req, res) => {
+  try {
+    const record = await closeMaintenance(req.params.id);
+    res.json(record);
+  } catch (err) {
+    return handleRuleError(res, err);
+  }
+});
 
 export const fuelRouter = Router();
 fuelRouter.use(requireAuth);

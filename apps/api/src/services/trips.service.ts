@@ -290,12 +290,30 @@ export async function cancelTrip(tripId: string) {
   });
 }
 
+const MAINT_TYPES = new Set<string>(Object.values(MaintenanceType));
+
+function resolveMaintenanceType(raw?: string | MaintenanceType): MaintenanceType {
+  if (raw && MAINT_TYPES.has(String(raw))) {
+    return raw as MaintenanceType;
+  }
+  return MaintenanceType.Service;
+}
+
 export async function openMaintenance(input: {
   vehicleId: string;
   description: string;
   cost?: number;
-  maintenanceType?: MaintenanceType;
+  maintenanceType?: string | MaintenanceType;
 }) {
+  if (!input.description?.trim()) {
+    throw new BusinessRuleError("Description is required");
+  }
+  const cost = input.cost ?? 0;
+  if (!Number.isFinite(cost) || cost < 0) {
+    throw new BusinessRuleError("Cost must be 0 or greater");
+  }
+  const maintenanceType = resolveMaintenanceType(input.maintenanceType);
+
   return prisma.$transaction(async (tx) => {
     const vehicle = await tx.vehicle.findUnique({ where: { id: input.vehicleId } });
     if (!vehicle) throw new BusinessRuleError("Vehicle not found", 404);
@@ -318,12 +336,12 @@ export async function openMaintenance(input: {
     return tx.maintenanceRecord.create({
       data: {
         vehicleId: input.vehicleId,
-        description: input.description,
-        cost: input.cost ?? 0,
-        maintenanceType: input.maintenanceType ?? MaintenanceType.Service,
+        description: input.description.trim(),
+        cost,
+        maintenanceType,
         status: MaintenanceStatus.InShop,
       },
-      include: { vehicle: true },
+      include: { vehicle: { include: { region: true } } },
     });
   });
 }
