@@ -2,11 +2,13 @@ import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { getStoredUser, hasRole, logout } from "../lib/auth";
 import {
+  IconAnalytics,
   IconChart,
   IconFuel,
   IconLogout,
   IconMenu,
   IconRoute,
+  IconSettings,
   IconTruck,
   IconUsers,
   IconWrench,
@@ -36,7 +38,7 @@ const allLinks = [
     to: "/maintenance",
     label: "Maintenance",
     icon: IconWrench,
-    roles: ["FLEET_MANAGER"],
+    roles: ["FLEET_MANAGER", "DISPATCHER", "SAFETY_OFFICER"],
   },
   {
     to: "/expenses",
@@ -49,6 +51,18 @@ const allLinks = [
     label: "Reports",
     icon: IconChart,
     roles: ["FLEET_MANAGER", "FINANCIAL_ANALYST", "DISPATCHER"],
+  },
+  {
+    to: "/analytics",
+    label: "Analytics",
+    icon: IconAnalytics,
+    roles: ["FLEET_MANAGER", "DISPATCHER", "SAFETY_OFFICER", "FINANCIAL_ANALYST"],
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: IconSettings,
+    roles: null as string[] | null,
   },
 ];
 

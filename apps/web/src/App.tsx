@@ -6,9 +6,11 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { VehiclesPage } from "./pages/VehiclesPage";
 import { DriversPage } from "./pages/DriversPage";
 import { TripsPage } from "./pages/TripsPage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
 import { ExpensesPage } from "./pages/ExpensesPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
         <Route path="/maintenance" element={<MaintenancePage />} />
         <Route path="/expenses" element={<ExpensesPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
