@@ -34,7 +34,7 @@ No Render disk needed.
 | **Root Directory** | `apps/api` |
 | **Runtime** | Node |
 | **Build Command** | `pnpm install && pnpm exec prisma generate && pnpm build` |
-| **Start Command** | `pnpm start:prod` |
+| **Start Command** | `pnpm start` |
 | **Plan** | Free |
 
 If `pnpm` missing on build:
@@ -42,6 +42,9 @@ If `pnpm` missing on build:
 ```bash
 npm install -g pnpm && pnpm install && pnpm exec prisma generate && pnpm build
 ```
+
+**P3005 fix:** Tables were created with `db:push`, so do **not** run `prisma migrate deploy` on start.  
+Use start command: `pnpm start` (only `node dist/index.js`).
 
 3. **Environment variables:**
 
@@ -66,12 +69,6 @@ pnpm exec tsx prisma/seed.ts
 ```
 
 (with same env vars)
-
-**Start command `pnpm start:prod`** runs `prisma migrate deploy` then `node dist/index.js`.  
-If you only used `db:push` and have no migrations folder yet, either:
-
-- Run `pnpm db:migrate` once locally and commit `prisma/migrations`, **or**  
-- Temporarily start with: `node dist/index.js` after tables exist on Neon  
 
 ---
 
