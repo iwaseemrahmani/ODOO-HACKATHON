@@ -12,6 +12,19 @@
       rel="stylesheet"
     />
     <title>TransitOps</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("transitops-theme");
+          if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.classList.add("dark");
+            document.documentElement.dataset.theme = "dark";
+          } else {
+            document.documentElement.dataset.theme = "light";
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="antialiased">
     <div id="root"></div>

@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { getStoredUser, hasRole, logout } from "../lib/auth";
+import { getStoredTheme, THEME_CHANGE_EVENT, toggleTheme, type ThemeMode } from "../lib/theme";
 import {
   IconAnalytics,
   IconChart,
   IconFuel,
   IconLogout,
   IconMenu,
+  IconMoon,
   IconRoute,
   IconSettings,
+  IconSun,
   IconTruck,
   IconUsers,
   IconWrench,
@@ -152,7 +155,22 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Layout() {
   const [open, setOpen] = useState(false);
+  const [theme, setThemeState] = useState<ThemeMode>(() => getStoredTheme());
   const user = getStoredUser();
+
+  useEffect(() => {
+    const onTheme = (e: Event) => {
+      const mode = (e as CustomEvent<ThemeMode>).detail;
+      if (mode === "light" || mode === "dark") setThemeState(mode);
+      else setThemeState(getStoredTheme());
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, onTheme);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, onTheme);
+  }, []);
+
+  function handleToggleTheme() {
+    toggleTheme();
+  }
 
   return (
     /* Shell locks to viewport — only main content scrolls */
@@ -198,6 +216,19 @@ export function Layout() {
               </span>
             </p>
           </div>
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-indigo-600"
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {theme === "dark" ? (
+              <IconSun className="w-[18px] h-[18px]" />
+            ) : (
+              <IconMoon className="w-[18px] h-[18px]" />
+            )}
+          </button>
           <div className="hidden sm:flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />

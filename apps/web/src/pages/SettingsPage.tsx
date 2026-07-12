@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getStoredUser } from "../lib/auth";
+import { getStoredTheme, setTheme, THEME_CHANGE_EVENT, type ThemeMode } from "../lib/theme";
+import { IconMoon, IconSun } from "../components/Icons";
 import { Alert, PageHeader, Panel } from "../components/ui";
 
 type NotificationSetting = {
@@ -11,6 +13,17 @@ type NotificationSetting = {
 
 export function SettingsPage() {
   const user = getStoredUser();
+  const [theme, setThemeState] = useState<ThemeMode>(() => getStoredTheme());
+
+  useEffect(() => {
+    const onTheme = (e: Event) => {
+      const mode = (e as CustomEvent<ThemeMode>).detail;
+      if (mode === "light" || mode === "dark") setThemeState(mode);
+      else setThemeState(getStoredTheme());
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, onTheme);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, onTheme);
+  }, []);
 
   const [notifications, setNotifications] = useState<NotificationSetting[]>([
     { key: "maintenance", label: "Maintenance alerts", description: "When a vehicle enters or leaves the shop", enabled: true },
@@ -39,6 +52,10 @@ export function SettingsPage() {
     setSaved(false);
   }
 
+  function handleThemeChange(mode: ThemeMode) {
+    setTheme(mode);
+  }
+
   function handleSave() {
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -51,7 +68,55 @@ export function SettingsPage() {
       {saved && <Alert type="success">Settings saved successfully.</Alert>}
 
       <div className="space-y-6">
-        <Panel className="animate-fade-up" title="Profile" description="Your account information">
+        <Panel className="animate-fade-up" title="Appearance" description="Theme and display">
+          <div className="p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-medium text-slate-900">Color theme</div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Switch between light and dark. Preference is saved on this device.
+                </div>
+              </div>
+              <div
+                className="inline-flex rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200/80"
+                role="group"
+                aria-label="Theme"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange("light")}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                    theme === "light"
+                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <IconSun className="w-4 h-4" />
+                  Light
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange("dark")}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                    theme === "dark"
+                      ? "bg-slate-800 text-white shadow-sm ring-1 ring-white/10"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <IconMoon className="w-4 h-4" />
+                  Dark
+                </button>
+              </div>
+            </div>
+            <p className="mt-4 text-[11px] text-slate-400">
+              Current mode: <span className="font-semibold text-slate-600 capitalize">{theme}</span>
+              {" · "}
+              You can also toggle from the sun/moon button in the top bar.
+            </p>
+          </div>
+        </Panel>
+
+        <Panel className="animate-fade-up stagger-1" title="Profile" description="Your account information">
           <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-2xl font-bold text-white shadow-lg shadow-indigo-500/20">

@@ -230,3 +230,213 @@ body {
 .stagger-2 { animation-delay: 0.1s; }
 .stagger-3 { animation-delay: 0.15s; }
 .stagger-4 { animation-delay: 0.2s; }
+
+/* ─── Dark theme (class on <html>) ─── */
+html.dark {
+  color-scheme: dark;
+  --color-surface: #0b1220;
+  --color-ink: #e2e8f0;
+  --color-muted: #94a3b8;
+}
+
+html.dark body {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+html.dark .card-elevated {
+  background: #111827;
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 8px 24px -8px rgba(0, 0, 0, 0.45);
+}
+
+html.dark .card-elevated:hover {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 12px 32px -10px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .input-field {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+html.dark .input-field::placeholder {
+  color: #64748b;
+}
+
+html.dark .input-field:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+html.dark .btn-ghost {
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+html.dark .btn-ghost:hover {
+  background: #1e293b;
+  border-color: #475569;
+}
+
+html.dark .btn-danger {
+  color: #fb7185;
+  border-color: #881337;
+}
+
+html.dark .btn-danger:hover {
+  background: rgba(136, 19, 55, 0.35);
+}
+
+html.dark .btn-success {
+  color: #34d399;
+  border-color: #065f46;
+}
+
+html.dark .btn-success:hover {
+  background: rgba(6, 95, 70, 0.35);
+}
+
+html.dark .table-shell thead th {
+  color: #94a3b8;
+  background: #0f172a;
+  border-bottom-color: #1e293b;
+}
+
+html.dark .table-shell tbody td {
+  border-bottom-color: #1e293b;
+  color: #e2e8f0;
+}
+
+html.dark .table-shell tbody tr:hover td {
+  background: #1e293b;
+}
+
+/* Common Tailwind utility overrides for app-wide dark mode */
+html.dark .bg-white {
+  background-color: #111827 !important;
+}
+html.dark .bg-white\/80,
+html.dark .bg-white\/90 {
+  background-color: rgba(17, 24, 39, 0.9) !important;
+}
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/80 {
+  background-color: #0f172a !important;
+}
+html.dark .bg-slate-100 {
+  background-color: #1e293b !important;
+}
+html.dark .bg-\[\#f4f6fb\] {
+  background-color: #0b1220 !important;
+}
+html.dark .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+html.dark .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+html.dark .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+html.dark .text-slate-600 {
+  color: #94a3b8 !important;
+}
+html.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark .text-slate-400 {
+  color: #64748b !important;
+}
+html.dark .border-slate-100,
+html.dark .border-slate-100\/80 {
+  border-color: #1e293b !important;
+}
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/90 {
+  border-color: #334155 !important;
+}
+html.dark .border-slate-300 {
+  border-color: #475569 !important;
+}
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+html.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-50\/40,
+html.dark .bg-indigo-50\/50,
+html.dark .bg-indigo-50\/60 {
+  background-color: rgba(49, 46, 129, 0.35) !important;
+}
+html.dark .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+}
+html.dark .bg-amber-50 {
+  background-color: rgba(120, 53, 15, 0.4) !important;
+}
+html.dark .bg-rose-50 {
+  background-color: rgba(136, 19, 55, 0.35) !important;
+}
+html.dark .bg-sky-50 {
+  background-color: rgba(12, 74, 110, 0.4) !important;
+}
+html.dark .bg-violet-50 {
+  background-color: rgba(76, 29, 149, 0.35) !important;
+}
+html.dark .text-indigo-600,
+html.dark .text-indigo-700 {
+  color: #a5b4fc !important;
+}
+html.dark .text-emerald-600,
+html.dark .text-emerald-700,
+html.dark .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+html.dark .text-amber-600,
+html.dark .text-amber-700,
+html.dark .text-amber-800,
+html.dark .text-amber-900 {
+  color: #fcd34d !important;
+}
+html.dark .text-rose-600,
+html.dark .text-rose-700,
+html.dark .text-rose-800 {
+  color: #fda4af !important;
+}
+html.dark .text-sky-600,
+html.dark .text-sky-700,
+html.dark .text-sky-800 {
+  color: #7dd3fc !important;
+}
+html.dark .text-violet-600,
+html.dark .text-violet-700,
+html.dark .text-violet-800 {
+  color: #c4b5fd !important;
+}
+html.dark .ring-slate-200,
+html.dark .ring-slate-100 {
+  --tw-ring-color: #334155 !important;
+}
+html.dark .border-indigo-100,
+html.dark .border-indigo-200 {
+  border-color: #3730a3 !important;
+}
+html.dark .border-dashed {
+  border-color: #475569 !important;
+}
+/* Keep dark sidebar navy even when utility overrides touch text/bg */
+html.dark aside.bg-\[\#0b1220\] {
+  background-color: #0b1220 !important;
+}
+
+html.dark .shadow-sm {
+  --tw-shadow-color: rgba(0, 0, 0, 0.4);
+}
