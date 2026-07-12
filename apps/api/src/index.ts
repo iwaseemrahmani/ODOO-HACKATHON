@@ -18,9 +18,28 @@ const app = express();
 
 const origins = env.corsOrigin.split(",").map((s) => s.trim());
 
+function isAllowedOrigin(origin: string | undefined) {
+  if (!origin) return true;
+  if (origins.includes(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 app.use(
   cors({
-    origin: origins,
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked for origin ${origin ?? "unknown"}`));
+    },
     credentials: true,
   })
 );

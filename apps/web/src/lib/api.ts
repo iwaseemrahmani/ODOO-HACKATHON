@@ -1,5 +1,10 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
+function joinApiUrl(baseUrl: string, path: string) {
+  if (!baseUrl) return path;
+  return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
 export function getToken() {
   return localStorage.getItem("token");
 }
@@ -17,7 +22,7 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const res = await fetch(joinApiUrl(API_URL, path), { ...options, headers });
 
   if (res.status === 204) return undefined as T;
 
