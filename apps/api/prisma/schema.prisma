@@ -9,25 +9,46 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String              @id @default(cuid())
+  email         String              @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  profileImage  String?
+  isActive      Boolean             @default(true)
+  lastLogin     DateTime?
+  role          Role
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  notifications         Notification[]
+  passwordResetTokens   PasswordResetToken[]
+  auditLogs             AuditLog[]
+  dispatchedTrips       Trip[]            @relation("TripDispatcher")
 }
 
 model Vehicle {
   id                 String              @id @default(cuid())
   registrationNo     String              @unique
   model              String
-  type               String              @default("Van")
-  region             String              @default("North")
+  manufacturer       String?
+  year               Int?
+  type               VehicleType
+  vin                String?
+  engineNumber       String?
+  fuelType           FuelType?
   capacity           String?
   maxLoad            Float
   odometer           Float               @default(0)
+  purchaseDate       DateTime?
+  purchasePrice      Float?
   acquisitionCost    Float               @default(0)
+  annualCost         Float               @default(0)
+  insuranceExpiry    DateTime?
+  fitnessExpiry      DateTime?
+  permitExpiry       DateTime?
+  currentLocation    String?
+  regionId           String?
+  region             Region?             @relation(fields: [regionId], references: [id])
   status             VehicleStatus       @default(Available)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -40,10 +61,17 @@ model Vehicle {
 model Driver {
   id               String       @id @default(cuid())
   name             String
+  email            String?
+  phone            String?
+  dateOfBirth      DateTime?
+  joiningDate      DateTime?
+  address          String?
+  emergencyContact String?
   licenseNo        String       @unique
   licenseCategory  String       @default("C")
   licenseExpiry    DateTime
-  phone            String?
+  medicalExpiry    DateTime?
+  experience       Int          @default(0)
   safetyScore      Int          @default(100)
   status           DriverStatus @default(Available)
   createdAt        DateTime     @default(now())
@@ -52,61 +80,87 @@ model Driver {
 }
 
 model Trip {
-  id               String     @id @default(cuid())
+  id               String       @id @default(cuid())
+  tripCode         String       @unique
   vehicleId        String
   driverId         String
+  dispatcherId     String?
   origin           String
   destination      String
   cargoWeight      Float
-  plannedDistance  Float      @default(0)
+  cargoType        String?
+  plannedDistance  Float        @default(0)
+  expectedDistance Float?
   distanceKm       Float?
-  revenue          Float      @default(0)
-  status           TripStatus @default(Draft)
-  scheduledAt      DateTime   @default(now())
+  estimatedHours   Float?
+  actualHours      Float?
+  revenue          Float        @default(0)
+  status           TripStatus   @default(Draft)
+  priority         TripPriority @default(Medium)
+  scheduledAt      DateTime     @default(now())
+  estimatedArrival DateTime?
+  departureTime    DateTime?
+  arrivalTime      DateTime?
   completedAt      DateTime?
+  regionId         String?
   notes            String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
   expenses         Expense[]
-  driver           Driver     @relation(fields: [driverId], references: [id])
-  vehicle          Vehicle    @relation(fields: [vehicleId], references: [id])
+  driver           Driver       @relation(fields: [driverId], references: [id])
+  vehicle          Vehicle      @relation(fields: [vehicleId], references: [id])
+  dispatcher       User?        @relation("TripDispatcher", fields: [dispatcherId], references: [id])
+  region           Region?      @relation(fields: [regionId], references: [id])
 }
 
 model MaintenanceRecord {
-  id          String            @id @default(cuid())
-  vehicleId   String
-  description String
-  cost        Float             @default(0)
-  status      MaintenanceStatus @default(Open)
-  openedAt    DateTime          @default(now())
-  closedAt    DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id])
+  id              String            @id @default(cuid())
+  vehicleId       String
+  description     String
+  maintenanceType MaintenanceType
+  cost            Float             @default(0)
+  status          MaintenanceStatus @default(ToShop)
+  assignedTo      String?
+  openedAt        DateTime          @default(now())
+  closedAt        DateTime?
+  nextServiceDate DateTime?
+  odometerReading Float?
+  vendor          String?
+  invoiceNo       String?
+  remarks         String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  vehicle         Vehicle           @relation(fields: [vehicleId], references: [id])
 }
 
 model FuelLog {
-  id        String   @id @default(cuid())
-  vehicleId String
-  liters    Float
-  cost      Float
-  date      DateTime @default(now())
-  odometer  Float?
-  createdAt DateTime @default(now())
-  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+  id            String   @id @default(cuid())
+  vehicleId     String
+  liters        Float
+  pricePerLiter Float?
+  cost          Float
+  mileage       Float?
+  fuelStation   String?
+  filledBy      String?
+  date          DateTime @default(now())
+  odometer      Float?
+  createdAt     DateTime @default(now())
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id])
 }
 
 model Expense {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   vehicleId   String?
   tripId      String?
-  type        String
+  category    ExpenseCategory
   amount      Float
-  date        DateTime @default(now())
+  date        DateTime         @default(now())
   description String?
-  createdAt   DateTime @default(now())
-  trip        Trip?    @relation(fields: [tripId], references: [id])
-  vehicle     Vehicle? @relation(fields: [vehicleId], references: [id])
+  approvedBy  String?
+  receiptUrl  String?
+  createdAt   DateTime         @default(now())
+  trip        Trip?            @relation(fields: [tripId], references: [id])
+  vehicle     Vehicle?         @relation(fields: [vehicleId], references: [id])
 }
 
 enum Role {
@@ -138,6 +192,89 @@ enum TripStatus {
 }
 
 enum MaintenanceStatus {
-  Open
+  ToShop
+  Scheduled
+  InShop
   Closed
+}
+
+enum VehicleType {
+  Truck
+  Van
+  MiniTruck
+  Trailer
+}
+
+enum FuelType {
+  Diesel
+  Petrol
+  CNG
+  Electric
+}
+
+enum TripPriority {
+  Low
+  Medium
+  High
+  Critical
+}
+
+enum MaintenanceType {
+  Service
+  Repair
+  Inspection
+  OilChange
+  TireChange
+}
+
+enum ExpenseCategory {
+  Fuel
+  Maintenance
+  Toll
+  DriverAllowance
+  Fine
+  Repair
+  Other
+}
+
+model Region {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  vehicles Vehicle[]
+  trips    Trip[]
+}
+
+model AppSetting {
+  id               Int    @id @default(1)
+  organizationName String
+  timezone         String @default("UTC")
+  currency         String @default("USD")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
