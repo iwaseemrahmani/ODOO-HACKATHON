@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { isLoggedIn, login } from "../lib/auth";
 import { IconSpark, IconTruck } from "../components/Icons";
 import { Alert, Label } from "../components/ui";
@@ -11,14 +11,26 @@ const demos = [
   { email: "finance@demo.com", role: "Finance" },
 ];
 
+function safeReturnPath(from: unknown): string {
+  if (typeof from !== "string" || !from.startsWith("/") || from.startsWith("//")) {
+    return "/";
+  }
+  if (from === "/login") return "/";
+  return from;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = safeReturnPath(
+    (location.state as { from?: string } | null)?.from
+  );
   const [email, setEmail] = useState("dispatch@demo.com");
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (isLoggedIn()) return <Navigate to="/" replace />;
+  if (isLoggedIn()) return <Navigate to={returnTo} replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -26,7 +38,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
