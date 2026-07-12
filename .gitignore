@@ -1,0 +1,30 @@
+node_modules
+dist
+build
+.turbo
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+apps/*/.env
+!apps/*/.env.example
+
+# Database
+*.db
+*.db-journal
+
+# Logs & OS
+logs
+*.log
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Deploy / misc
+.vercel
+coverage

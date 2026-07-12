@@ -1,0 +1,22 @@
+{
+  "name": "transitops",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TransitOps — Fleet & Transport Operations ERP",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm -r build",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:push": "pnpm --filter api db:push",
+    "db:seed": "pnpm --filter api db:seed",
+    "db:studio": "pnpm --filter api db:studio",
+    "setup": "pnpm install && pnpm db:generate && pnpm db:push && pnpm db:seed"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

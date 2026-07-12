@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Neon: DATABASE_URL = pooled, DIRECT_URL = direct (migrations)
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  FLEET_MANAGER
+  DISPATCHER
+  SAFETY_OFFICER
+  FINANCIAL_ANALYST
+}
+
+enum VehicleStatus {
+  Available
+  OnTrip
+  InShop
+  Retired
+}
+
+enum DriverStatus {
+  Available
+  OnTrip
+  Suspended
+}
+
+enum TripStatus {
+  Draft
+  Dispatched
+  Completed
+  Cancelled
+}
+
+enum MaintenanceStatus {
+  Open
+  Closed
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Vehicle {
+  id             String        @id @default(cuid())
+  registrationNo String        @unique
+  model          String
+  capacity       String?
+  maxLoad        Float
+  odometer       Float         @default(0)
+  status         VehicleStatus @default(Available)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  trips               Trip[]
+  maintenanceRecords  MaintenanceRecord[]
+  fuelLogs            FuelLog[]
+  expenses            Expense[]
+}
+
+model Driver {
+  id            String       @id @default(cuid())
+  name          String
+  licenseNo     String       @unique
+  licenseExpiry DateTime
+  phone         String?
+  status        DriverStatus @default(Available)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  trips Trip[]
+}
+
+model Trip {
+  id           String     @id @default(cuid())
+  vehicleId    String
+  driverId     String
+  origin       String
+  destination  String
+  cargoWeight  Float
+  status       TripStatus @default(Draft)
+  scheduledAt  DateTime   @default(now())
+  completedAt  DateTime?
+  distanceKm   Float?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id])
+  driver   Driver    @relation(fields: [driverId], references: [id])
+  expenses Expense[]
+}
+
+model MaintenanceRecord {
+  id          String            @id @default(cuid())
+  vehicleId   String
+  description String
+  cost        Float             @default(0)
+  status      MaintenanceStatus @default(Open)
+  openedAt    DateTime          @default(now())
+  closedAt    DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+}
+
+model FuelLog {
+  id        String   @id @default(cuid())
+  vehicleId String
+  liters    Float
+  cost      Float
+  date      DateTime @default(now())
+  odometer  Float?
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  vehicleId   String?
+  tripId      String?
+  type        String
+  amount      Float
+  date        DateTime @default(now())
+  description String?
+  createdAt   DateTime @default(now())
+
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id])
+  trip    Trip?    @relation(fields: [tripId], references: [id])
+}
